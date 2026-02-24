@@ -1,0 +1,12 @@
+from django.urls import path
+from . import views
+from . import api_views
+
+urlpatterns = [
+    path('webhook/', views.twilio_webhook, name='twilio-webhook'),
+    path('send/', api_views.SendMessageAPIView.as_view(), name='messaging-send'),
+    path('messages/', api_views.ConversationMessagesAPIView.as_view(), name='messaging-messages'),
+    path('messages/', api_views.ConversationMessagesAPIView.as_view(), name='messaging-messages'),
+    path('conversations/', api_views.ConversationListAPIView.as_view(), name='messaging-conversations'),
+    path('conversations/get_or_create/', api_views.GetOrCreateConversationAPIView.as_view(), name='messaging-get-or-create'),
+]

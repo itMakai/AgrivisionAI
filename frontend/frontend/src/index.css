@@ -1,0 +1,170 @@
+/* Import Bootstrap's CSS (via npm) */
+@import "../node_modules/bootstrap/dist/css/bootstrap.min.css";
+
+/* Theme colors: gray, dark blue, silver */
+:root {
+  /* Mint / dark-green / silver theme (theme preview) */
+  --mint-bg: #e9f7ef; /* page mint background */
+  --hero-mint: #e7fbf0; /* hero card pale mint */
+  --primary: #0f6b4b; /* deep green for headings & primary actions */
+  --primary-strong: #0b5a3f;
+  --muted-gray: #6b7280;
+  --silver: #e6eaec; /* light silver panel */
+  --card-bg: #f7fbf9; /* very light card bg */
+  --accent: #cfe8df;
+}
+
+body {
+  background: linear-gradient(180deg, var(--mint-bg) 0%, #ffffff 40%);
+  color: #0f1724;
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+}
+
+/* Header */
+.app-header {
+  background: linear-gradient(90deg, var(--primary), var(--primary-strong));
+  color: #ffffff;
+}
+.app-header .brand-logo {
+  width: 40px;
+  height: 40px;
+}
+
+.app-card {
+  border-radius: 20px;
+  background: var(--card-bg);
+  border: 1px solid rgba(15,23,42,0.04);
+  box-shadow: 0 10px 30px rgba(2,6,23,0.06);
+}
+
+.muted-text { color: var(--muted-gray); }
+.silver-text { color: var(--accent); }
+
+.app-bottom-nav .nav-link { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+
+/* Top navbar specific styles */
+.app-header { padding: 0.6rem 0; }
+.app-header { position: sticky; top: 0; z-index: 1050; }
+.app-header .nav-link { color: rgba(255,255,255,0.85); margin-right: 0.25rem; }
+.app-header .nav-link:hover { color: #fff; opacity: 0.95; text-decoration: none; }
+.app-header .nav-link.text-primary { color: #d7f6ea !important; font-weight: 600; }
+.app-header .nav-link .me-1 { opacity: 0.95; }
+
+/* Hamburger button */
+.navbar-toggler-icon { font-size: 1.15rem; line-height: 1; }
+.navbar-toggler { padding: 0.35rem 0.5rem; }
+
+/* Mobile menu panel */
+#topNavMobile { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 1040; }
+.mobile-panel {
+  background: var(--primary); /* dark green */
+  color: #fff;
+  box-shadow: 0 8px 30px rgba(2,6,23,0.12);
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+#topNavMobile .nav-link { color: #ffffff; }
+#topNavMobile .nav-link.text-primary { color: var(--hero-mint); }
+#topNavMobile .nav-link:hover { color: #e6fff4; }
+
+/* Make top nav links slightly elevated */
+.app-header .nav-link.active {
+  background: rgba(255,255,255,0.04);
+  border-radius: 8px;
+  padding-left: 0.5rem; padding-right: 0.5rem;
+}
+
+.insight-value { font-size: 1.6rem; font-weight: 700; }
+.insight-label { color: var(--muted-gray); font-size: 0.9rem; }
+
+/* Small helpers */
+.card-compact { padding: 1rem; }
+
+/* Hero card matching screenshot: pale mint with a silver curved panel on the right */
+.hero-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  background: linear-gradient(90deg, var(--hero-mint) 0%, var(--hero-mint) 60%, transparent 100%);
+  border: 1px solid rgba(15,23,42,0.03);
+  box-shadow: 0 12px 30px rgba(2,6,23,0.06);
+}
+.hero-card .card-body { position: relative; z-index: 2; }
+.hero-card::after {
+  /* silver curved panel on the right */
+  content: '';
+  position: absolute;
+  right: -6%;
+  top: 0;
+  bottom: 0;
+  width: 36%;
+  background: var(--silver);
+  border-top-left-radius: 120px;
+  border-bottom-left-radius: 120px;
+  z-index: 1;
+}
+
+/* Primary buttons styled to match screenshot */
+.btn-primary.custom {
+  background-color: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(15, 75, 60, 0.12);
+}
+.btn-outline-primary.custom {
+  background: transparent;
+  color: var(--primary);
+  border: 1px solid rgba(15, 75, 60, 0.12);
+}
+
+.hero-cta { display: inline-flex; gap: 0.6rem; align-items: center; }
+
+
+/* Profile page styling */
+.profile-avatar {
+  width: 96px;
+  height: 96px;
+  margin: 0 auto;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(2,6,23,0.08);
+  display: inline-block;
+}
+
+.profile-card .form-control-plaintext { font-weight: 600; }
+.profile-meta { padding-left: 1rem; }
+
+.platform-hero {
+  border-radius: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: linear-gradient(115deg, #f4fcf7 0%, #edf7f2 55%, #f9fcfb 100%);
+  padding: 1.2rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.metric-card {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  padding: 0.9rem;
+  height: 100%;
+  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.04);
+}
+
+.metric-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #0f2e21;
+}
+
+.metric-label {
+  margin-top: 0.25rem;
+  font-size: 0.76rem;
+  color: var(--muted-gray);
+}
+
