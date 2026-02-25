@@ -40,3 +40,39 @@
 .read-the-docs {
   color: #888;
 }
+
+.platform-hero {
+  background: linear-gradient(135deg, #f4f8f4, #e6f4ea);
+  border-left: 6px solid #198754;
+}
+
+.metric-card {
+  padding: 1rem;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+  transition: all 0.2s ease;
+}
+
+.metric-card:hover {
+  transform: translateY(-4px);
+}
+
+.metric-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #198754;
+}
+
+.metric-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #6c757d;
+  letter-spacing: 0.6px;
+}
+
+.app-card {
+  border-radius: 16px;
+  border: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
