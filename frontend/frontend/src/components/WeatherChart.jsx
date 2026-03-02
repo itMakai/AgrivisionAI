@@ -3,7 +3,7 @@ import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
-  BarElement,          // THIS WAS MISSING!
+  BarElement,          
   PointElement,
   LineElement,
   Title,
@@ -13,7 +13,7 @@ import {
 import { Bar } from 'react-chartjs-2';
 import { fetchRealTimeWeather } from '../lib/api';
 
-// Register BarElement — THIS FIXES YOUR ERROR
+// Register BarElement 
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, Title, Tooltip, Legend);
 
 export default function WeatherChart({ lang, weatherData = null }) {
