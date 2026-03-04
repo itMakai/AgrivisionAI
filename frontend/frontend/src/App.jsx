@@ -27,8 +27,8 @@ function App() {
       <nav className="navbar app-header sticky-top">
         <div className="container d-flex justify-content-between align-items-center py-2 gap-2">
           <div>
-            <div className="fw-bold text-white">Makueni AgriVisionAI (AN INTEGRATED AI-DRIVEN PLATFORM FOR EMPOWERING FARMERS IN 
-MAKUENI COUNTY)</div>
+            <div className="fw-bold text-white">Makueni AgriVisionAI </div>
+            <div>(AN INTEGRATED AI-DRIVEN PLATFORM FOR EMPOWERING FARMERS IN MAKUENI COUNTY)</div>
             <div className="small text-white-50">AI-Driven Agriculture Platform</div>
           </div>
 
