@@ -11,6 +11,9 @@ export default function RegisterPage() {
   const [role, setRole] = useState('farmer');
   const [phone, setPhone] = useState('');
   const [location, setLocation] = useState('');
+  const [providerName, setProviderName] = useState('');
+  const [offersTransport, setOffersTransport] = useState(true);
+  const [offersColdStorage, setOffersColdStorage] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -20,7 +23,15 @@ export default function RegisterPage() {
     setError(null);
     setLoading(true);
     try {
-      const data = await registerUser({ username, password, email, role, phone_number: phone, location });
+      const payload = { username, password, email, role, phone_number: phone, location };
+      if (role === 'provider') {
+        payload.provider_name = providerName || username;
+        payload.contact_phone = phone;
+        payload.address = location;
+        payload.offers_transport = offersTransport;
+        payload.offers_cold_storage = offersColdStorage;
+      }
+      const data = await registerUser(payload);
       // expect { token, user }
       if (data.token) {
         setToken(data.token);
@@ -67,7 +78,8 @@ export default function RegisterPage() {
                   <div className="w-100">
                     <div className="mb-4">
                       <h3 className="fw-bold text-dark mb-1">Create an Account</h3>
-                      <p className="text-muted">Fill in your details to get started with AgriVisionAI.</p>
+                      <p className="text-muted">Fill in your details to get started with Agritech.</p>
+                      <p className="small text-muted mb-0">Admin accounts can only be created by existing admins from the Admin Dashboard.</p>
                     </div>
 
                     {error && (
@@ -129,6 +141,7 @@ export default function RegisterPage() {
                           >
                             <option value="farmer">Farmer / Seller</option>
                             <option value="buyer">Verified Buyer</option>
+                            <option value="provider">Service / Transport Provider</option>
                           </select>
                         </div>
 
@@ -156,6 +169,32 @@ export default function RegisterPage() {
                           />
                         </div>
 
+                        {role === 'provider' && (
+                          <>
+                            <div className="col-12">
+                              <label className="form-label fw-semibold text-secondary small mb-1">Provider name</label>
+                              <input
+                                type="text"
+                                className="form-control form-control-lg bg-light border-0"
+                                placeholder="e.g. Makueni Logistics"
+                                value={providerName}
+                                onChange={(e) => setProviderName(e.target.value)}
+                                style={{ fontSize: '0.95rem' }}
+                              />
+                              <div className="form-text">You can update details later in your profile.</div>
+                            </div>
+                            <div className="col-12">
+                              <div className="form-check">
+                                <input className="form-check-input" type="checkbox" id="offersTransport" checked={offersTransport} onChange={(e) => setOffersTransport(e.target.checked)} />
+                                <label className="form-check-label" htmlFor="offersTransport">Offers transport</label>
+                              </div>
+                              <div className="form-check">
+                                <input className="form-check-input" type="checkbox" id="offersColdStorage" checked={offersColdStorage} onChange={(e) => setOffersColdStorage(e.target.checked)} />
+                                <label className="form-check-label" htmlFor="offersColdStorage">Offers cold storage</label>
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
 
                       <button 

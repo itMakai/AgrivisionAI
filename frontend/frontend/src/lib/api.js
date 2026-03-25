@@ -8,9 +8,9 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-export async function sendMessage({ to, channel, body }) {
-  // POST to backend endpoint; backend should accept {to, channel, body} and return {reply, sid}
-  const res = await api.post('messaging/send/', { to, channel, body });
+export async function sendMessage(payload) {
+  // POST to backend endpoint; supports external (to/channel/body) and internal (conversation_id/to_user/body) messages.
+  const res = await api.post('messaging/send/', payload);
   return res.data;
 }
 
@@ -130,6 +130,21 @@ export async function fetchPlatformAnalytics(params = {}) {
   return res.data;
 }
 
+export async function fetchAdminMetrics() {
+  const res = await api.get('admin/metrics/');
+  return res.data;
+}
+
+export async function fetchAdminUsers() {
+  const res = await api.get('admin/users/');
+  return res.data;
+}
+
+export async function createAdminManagedUser(payload) {
+  const res = await api.post('admin/users/', payload);
+  return res.data;
+}
+
 export async function fetchTransportOptions(params = {}) {
   const res = await api.get('platform/transport/options/', { params });
   return res.data;
@@ -156,7 +171,7 @@ export async function fetchRealTimeWeather(params = {}) {
   return res.data;
 }
 
-export async function fetchConversation(phone, channel = 'sms') {
+export async function fetchConversation(phone) {
   // expects query param 'conversation' with phone
   const res = await api.get('messaging/messages/', { params: { conversation: phone } });
   return res.data;
@@ -200,6 +215,34 @@ export async function updateProfile(data) {
   }
   const res = await api.put('auth/profile/', data);
   return res.data;
+}
+
+// ----- WebSocket helpers -----
+
+const WS_BASE = (() => {
+  const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:8000/api/';
+  // Derive WebSocket base from the HTTP base (strip trailing /api/)
+  const httpBase = apiBase.replace(/\/api\/?$/, '');
+  return httpBase.replace(/^http/, 'ws');
+})();
+
+/**
+ * Open a WebSocket to a per-conversation chat room.
+ * @param {number|string} conversationId
+ * @returns {WebSocket}
+ */
+export function openChatSocket(conversationId) {
+  const token = localStorage.getItem('avai_token') || '';
+  return new WebSocket(`${WS_BASE}/ws/chat/${conversationId}/?token=${token}`);
+}
+
+/**
+ * Open a WebSocket to the per-user notification channel.
+ * @returns {WebSocket}
+ */
+export function openNotificationsSocket() {
+  const token = localStorage.getItem('avai_token') || '';
+  return new WebSocket(`${WS_BASE}/ws/notifications/?token=${token}`);
 }
 
 export default api;

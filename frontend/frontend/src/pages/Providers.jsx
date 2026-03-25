@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { fetchProviders, fetchServices } from '../lib/api';
 import { Link } from 'react-router-dom';
 import BookingForm from '../components/BookingForm';
+import { AuthContext } from '../context/AuthContext';
 
 // --- Custom CSS for Polish ---
 const providerStyles = `
@@ -34,6 +35,8 @@ const providerStyles = `
 `;
 
 export default function ProvidersPage() {
+  const { user } = useContext(AuthContext);
+  const isAdmin = !!(user && (user.is_staff || user.is_superuser || user?.privileges?.is_admin || user.role === 'admin'));
   const [providers, setProviders] = useState([]);
   const [servicesMap, setServicesMap] = useState({});
   const [loading, setLoading] = useState(true);
@@ -87,9 +90,11 @@ export default function ProvidersPage() {
             </p>
           </div>
           <div className="flex-shrink-0">
-            <Link to="/providers/new" className="btn btn-light text-success btn-lg fw-bold rounded-pill shadow-sm px-4">
-              + Add Provider
-            </Link>
+            {isAdmin ? (
+              <Link to="/providers/new" className="btn btn-light text-success btn-lg fw-bold rounded-pill shadow-sm px-4">
+                + Add Provider
+              </Link>
+            ) : null}
           </div>
         </div>
       </div>

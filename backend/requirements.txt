@@ -1,8 +1,12 @@
 django>=5.2
 djangorestframework
-twilio
 python-dotenv
 requests
-# optional: celery & beat for scheduled retraining
-# celery
-# django-celery-beat
+# WebSocket real-time chat
+channels>=4.0
+channels-redis>=4.0
+daphne>=4.0
+# Celery for async task broadcasting
+celery>=5.3
+redis>=5.0
+Pillow

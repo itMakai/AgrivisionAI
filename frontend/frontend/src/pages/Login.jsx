@@ -54,7 +54,7 @@ export default function LoginPage() {
                   <div className="h-100 d-flex flex-column justify-content-center p-5 text-white">
                     <h2 className="display-6 fw-bold mb-3">Welcome Back</h2>
                     <p className="fs-5 mb-0" style={{ opacity: 0.9 }}>
-                      Access your AgriVisionAI dashboard to track real-time prices, weather advisories, and connect with verified buyers.
+                      Access your Agritech dashboard to track real-time prices, weather advisories, and connect with verified buyers.
                     </p>
                   </div>
                 </div>

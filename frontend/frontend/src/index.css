@@ -74,6 +74,33 @@ body {
   padding-left: 0.5rem; padding-right: 0.5rem;
 }
 
+.mobile-nav-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0.75rem;
+  left: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-radius: 12px;
+  background: rgba(11, 90, 63, 0.98);
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  z-index: 1060;
+}
+
+.mobile-nav-menu .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+@media (min-width: 992px) {
+  .mobile-nav-menu {
+    display: none;
+  }
+}
+
 .insight-value { font-size: 1.6rem; font-weight: 700; }
 .insight-label { color: var(--muted-gray); font-size: 0.9rem; }
 

@@ -144,7 +144,7 @@ export default function AgriControlCenter() {
         <div className="card-body p-4 p-md-5 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
           <div>
             <span className="badge bg-white text-success fw-bold px-3 py-2 rounded-pill mb-2">Control Center</span>
-            <h2 className="display-6 fw-bold mb-1">AgriVisionAI Hub</h2>
+            <h2 className="display-6 fw-bold mb-1">Agritech Hub</h2>
             <p className="mb-0 opacity-75 fs-6">
               Centralized farm operations, market intelligence, climate analytics, and logistics coordination.
             </p>
@@ -152,7 +152,7 @@ export default function AgriControlCenter() {
           <div className="text-md-end bg-black bg-opacity-25 p-3 rounded-4 backdrop-blur">
             <div className="small text-white-50 text-uppercase fw-semibold tracking-wide">System Identity</div>
             <div className="fs-5 fw-bold">
-              {overview?.platform || 'AgriVisionAI Core'}
+              {overview?.platform || 'Agritech Core'}
             </div>
           </div>
         </div>
@@ -195,7 +195,7 @@ export default function AgriControlCenter() {
         {activeTab === 'overview' && <OverviewPanel overview={overview} />}
         {activeTab === 'auth' && <AuthPanel data={authData} />}
         {activeTab === 'market' && <MarketPanel data={marketData} />}
-        {activeTab === 'ai' && <AiPanel data={aiData} transportRequests={transportRequests} />}
+        {activeTab === 'ai' && <AiPanel data={aiData} />}
       </div>
     </div>
   );
@@ -284,7 +284,6 @@ function AuthPanel({ data }) {
 }
 
 function MarketPanel({ data }) {
-  const totals = data?.totals || {};
   const listings = data?.recent_listings || [];
 
   return (
@@ -342,9 +341,11 @@ function MarketPanel({ data }) {
   );
 }
 
-function AiPanel({ data, transportRequests }) {
+function AiPanel({ data }) {
   const weather = data?.weather || {};
   const advisories = data?.advisories || [];
+  const climateAlerts = data?.climate_alerts || [];
+  const recommendations = data?.recommendations || [];
   const priceSeries = data?.price_series || [];
 
   return (
@@ -378,6 +379,20 @@ function AiPanel({ data, transportRequests }) {
             <div className="bg-white rounded-4 p-3 shadow-sm text-dark mt-auto">
               <WeatherChart weatherData={weather} />
             </div>
+
+            {climateAlerts.length > 0 ? (
+              <div className="mt-3 bg-white bg-opacity-25 rounded-4 p-3">
+                <div className="fw-bold small text-uppercase opacity-75 mb-2">Climate alerts</div>
+                <div className="d-flex flex-column gap-2">
+                  {climateAlerts.map((a, idx) => (
+                    <div key={idx} className="small">
+                      <span className="badge bg-light text-dark border me-2">{a.severity}</span>
+                      {a.message}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -415,6 +430,17 @@ function AiPanel({ data, transportRequests }) {
                 </div>
               )}
             </div>
+
+            {recommendations.length > 0 ? (
+              <div className="mt-4">
+                <h6 className="fw-bold mb-2">Recommendations</h6>
+                <ul className="mb-0">
+                  {recommendations.slice(0, 6).map((r, idx) => (
+                    <li key={idx} className="small text-muted">{r.message}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

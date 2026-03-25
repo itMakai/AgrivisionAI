@@ -119,7 +119,7 @@ export default function HomePage() {
             <div className="col-12 col-md-8 col-lg-7">
               <span className="badge bg-success mb-3 px-3 py-2 rounded-pill fs-6">Empowering Modern Farmers</span>
               <h1 className="display-4 fw-bold mb-3" style={{ lineHeight: '1.2' }}>
-                Farm Smarter, <br /> Sell Better with AgriVisionAI
+                Farm Smarter, <br /> Sell Better with Agritech
               </h1>
               <p className="mb-4 fs-5" style={{ opacity: 0.9 }}>
                 Connect your farm to real-time price forecasts, weather insights, and market coordination—all in one easy-to-use platform.
@@ -135,10 +135,10 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Why AgriVisionAI (Grid Layout) */}
+      {/* Why Agritech (Grid Layout) */}
       <section className="mb-5 pt-3">
         <div className="text-center mb-5">
-          <h2 className="fw-bold text-dark">Why Choose AgriVisionAI?</h2>
+          <h2 className="fw-bold text-dark">Why Choose Agritech?</h2>
           <p className="text-muted">Tools designed specifically to maximize your harvest value.</p>
         </div>
         <div className="row g-4">
@@ -201,7 +201,7 @@ export default function HomePage() {
         <div className="card-body p-5 text-center text-white">
           <h2 className="fw-bold mb-3">Ready to modernize your agri-operations?</h2>
           <p className="mb-4 fs-5" style={{ opacity: 0.9 }}>
-            Join a growing community of farmers and buyers who rely on AgriVisionAI for smarter, data-driven decisions.
+            Join a growing community of farmers and buyers who rely on Agritech for smarter, data-driven decisions.
           </p>
           <div className="d-flex flex-column flex-sm-row gap-3 justify-content-center">
             <Link to="/register" className="btn btn-light text-success btn-lg px-5 fw-bold rounded-pill">Create Free Account</Link>

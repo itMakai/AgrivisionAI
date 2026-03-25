@@ -1,83 +1,113 @@
-import { useState } from 'react';
-import { sendMessage } from '../lib/api';
+﻿import React, { useContext, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { fetchFarmers, fetchBuyers, getOrCreateConversationWithUser } from '../lib/api';
+import MessageModal from '../components/MessageModal';
+import { AuthContext } from '../context/AuthContext';
 
+/**
+ * New Messages page — replaced the old Twilio SMS/WhatsApp page.
+ * Users can search for other platform users and open a real-time WebSocket chat.
+ */
 export default function MessagesPage() {
-  const [to, setTo] = useState('');
-  const [channel, setChannel] = useState('sms');
-  const [body, setBody] = useState('');
+  const { user, isAuth } = useContext(AuthContext);
+  const [search, setSearch] = useState('');
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState([]);
+  const [openConvId, setOpenConvId] = useState(null);
+  const [openName, setOpenName] = useState('');
   const [error, setError] = useState(null);
 
-  async function onSend(e) {
-    e.preventDefault();
-    setError(null);
-    if (!to || !body) {
-      setError('Please provide a destination number and a message');
-      return;
-    }
+  useEffect(() => {
     setLoading(true);
+    Promise.all([fetchFarmers(), fetchBuyers()])
+      .then(([farmers, buyers]) => {
+        const all = [
+          ...(farmers.results || farmers || []).map((f) => ({
+            id: f.user_id || f.id,
+            username: f.username || f.user,
+            label: f.username || f.user,
+            role: 'Farmer',
+            location: f.location || '',
+          })),
+          ...(buyers.results || buyers || []).map((b) => ({
+            id: b.user_id || b.id,
+            username: b.username || b.user,
+            label: b.username || b.user,
+            role: 'Buyer',
+            location: b.location || '',
+          })),
+        ];
+        // Remove current user and deduplicate
+        const seen = new Set();
+        const filtered = all.filter((u) => {
+          if (!u.id || seen.has(u.id) || u.username === user?.username) return false;
+          seen.add(u.id);
+          return true;
+        });
+        setUsers(filtered);
+      })
+      .catch(() => setError('Failed to load users'))
+      .finally(() => setLoading(false));
+  }, [user]);
+
+  async function startChat(u) {
     try {
-      // backend should accept { to, channel, body } and return { reply, sid }
-      const data = await sendMessage({ to: channel === 'whatsapp' && !to.startsWith('whatsapp:') ? `whatsapp:${to}` : to, channel, body });
-      const reply = data.reply || data.message || 'No reply';
-      setMessages(prev => [{ outbound: true, body }, { inbound: true, body: reply }].concat(prev));
-      setBody('');
-    } catch (err) {
-      setError(err?.response?.data?.detail || err.message || 'Send failed');
-    } finally {
-      setLoading(false);
+      const conv = await getOrCreateConversationWithUser(u.id);
+      setOpenConvId(conv.id);
+      setOpenName(u.label || u.username);
+    } catch (_e) {
+      setError('Could not start conversation');
     }
   }
 
+  const filtered = search.trim()
+    ? users.filter(
+        (u) =>
+          (u.label || '').toLowerCase().includes(search.toLowerCase()) ||
+          (u.location || '').toLowerCase().includes(search.toLowerCase()),
+      )
+    : users;
+
   return (
-    <div className="">
-      <h2 className="h3 fw-bold" style={{ color: 'var(--primary)' }}>Messaging</h2>
+    <div>
+      <h2 className="h3 fw-bold mb-3" style={{ color: 'var(--primary)' }}>Messages</h2>
 
-      <div className="card app-card mt-3">
-        <div className="card-body">
-          <form onSubmit={onSend}>
-            <div className="row g-2 align-items-end">
-              <div className="col-12 col-md-4">
-                <label className="form-label small">To (phone)</label>
-                <input className="form-control" value={to} onChange={e => setTo(e.target.value)} placeholder="+2547..." />
-              </div>
-              <div className="col-12 col-md-2">
-                <label className="form-label small">Channel</label>
-                <select className="form-select" value={channel} onChange={e => setChannel(e.target.value)}>
-                  <option value="sms">SMS</option>
-                  <option value="whatsapp">WhatsApp</option>
-                </select>
-              </div>
-              <div className="col-12 col-md-6">
-                <label className="form-label small">Message</label>
-                <input className="form-control" value={body} onChange={e => setBody(e.target.value)} placeholder="Ask: Bei ya mahindi Wote?" />
-              </div>
-            </div>
-
-            <div className="mt-3 d-flex gap-2">
-              <button className="btn btn-primary custom" type="submit" disabled={loading}>{loading ? 'Sending...' : 'Send'}</button>
-              <button type="button" className="btn btn-outline-secondary" onClick={() => { setTo(''); setBody(''); setError(null); }}>Clear</button>
-            </div>
-          </form>
-
-          {error && <div className="alert alert-danger mt-3">{error}</div>}
-
-          <div className="mt-4">
-            <h6 className="small muted-text">Recent messages</h6>
-            <div style={{ maxHeight: '40vh', overflow: 'auto' }}>
-              {messages.length === 0 && <div className="text-muted small">No messages yet. Sent messages will appear here with replies.</div>}
-              {messages.map((m, i) => (
-                <div key={i} className={`p-2 my-2 ${m.outbound ? 'text-end' : ''}`}>
-                  <div className={`d-inline-block p-2 ${m.outbound ? 'bg-primary text-white' : 'bg-light text-dark'} rounded`} style={{ maxWidth: '85%' }}>
-                    {m.body}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+      <div className="mb-3">
+        <input
+          className="form-control"
+          placeholder="Search users by name or location…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </div>
+
+      {error && <div className="alert alert-danger">{error}</div>}
+      {loading && <div className="text-muted">Loading users…</div>}
+
+      {!loading && filtered.length === 0 && (
+        <div className="text-muted">No users found.</div>
+      )}
+
+      <div className="list-group">
+        {filtered.map((u) => (
+          <div key={u.id} className="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+              <div className="fw-semibold">{u.label}</div>
+              <div className="small text-muted">{u.role}{u.location ? ` · ${u.location}` : ''}</div>
+            </div>
+            <button className="btn btn-sm btn-primary" onClick={() => startChat(u)}>
+              Chat
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <MessageModal
+        open={!!openConvId}
+        onClose={() => setOpenConvId(null)}
+        conversationId={openConvId}
+        displayName={openName}
+      />
     </div>
   );
 }
