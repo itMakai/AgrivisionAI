@@ -1,10 +1,8 @@
 import React, { useEffect, useState, useContext } from 'react';
 import { NavLink } from 'react-router-dom';
-import { fetchProfile, updateProfile, fetchService } from '../lib/api';
+import { fetchListings, fetchProfile, updateProfile, fetchService } from '../lib/api';
 import { fetchProfileByUsername } from '../lib/api';
-import api from '../lib/api';
 import { fetchConversations, getOrCreateConversationWithUser } from '../lib/api';
-import RatingModal from '../components/RatingModal';
 import MessageModal from '../components/MessageModal';
 import { AuthContext } from '../context/AuthContext';
 import BookingForm from '../components/BookingForm';
@@ -75,7 +73,7 @@ export default function ProfilePage({ lang = 'en' }) {
   const [buyerDescription, setBuyerDescription] = useState('');
   const [hasTransport, setHasTransport] = useState(false);
   const [products, setProducts] = useState([]);
-  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [listings, setListings] = useState([]);
   const [messageModalOpen, setMessageModalOpen] = useState(false);
   const [messagePhone, setMessagePhone] = useState(null);
   const { user: currentUser } = useContext(AuthContext);
@@ -86,7 +84,7 @@ export default function ProfilePage({ lang = 'en' }) {
     const params = new URLSearchParams(window.location.search);
     const otherUser = params.get('user');
     const loader = otherUser ? fetchProfileByUsername : fetchProfile;
-    loader(otherUser).then(data => {
+    loader(otherUser).then(async data => {
       if (!mounted) return;
       setProfile(data);
       setPhone(data.phone_number || '');
@@ -99,6 +97,13 @@ export default function ProfilePage({ lang = 'en' }) {
       setBuyerDescription(data.description || '');
       const prodList = data.products || data.product_requests || [];
       setProducts(Array.isArray(prodList) ? prodList : []);
+      if (data.role === 'farmer') {
+        const listingRows = await fetchListings({ owner: otherUser || data.username, active: true });
+        if (!mounted) return;
+        setListings(listingRows?.results || listingRows || []);
+      } else {
+        setListings([]);
+      }
       setVerified(!!data.verified);
       setHasTransport(!!data.has_transport);
       setLoading(false);
@@ -163,6 +168,12 @@ export default function ProfilePage({ lang = 'en' }) {
       setHasTransport(!!p.has_transport);
       const newProducts = p.products || p.product_requests || [];
       setProducts(Array.isArray(newProducts) ? newProducts : []);
+      if (p.role === 'farmer') {
+        const listingRows = await fetchListings({ owner: 'me', active: true });
+        setListings(listingRows?.results || listingRows || []);
+      } else {
+        setListings([]);
+      }
       setPhone(p.phone_number || '');
       setLocation(p.location || '');
       setName(p.username || '');
@@ -184,7 +195,7 @@ export default function ProfilePage({ lang = 'en' }) {
         setMessageConversationIdGlobal(conv.id);
         setMessageModalOpenGlobal(true);
         return;
-      } catch(e) { /* fallback */ }
+      } catch { /* fallback */ }
     }
     setMessagePhone(profile.phone_number);
     setMessageModalOpen(true);
@@ -202,9 +213,7 @@ export default function ProfilePage({ lang = 'en' }) {
   const paramsForView = new URLSearchParams(window.location.search);
   const otherUserParam = paramsForView.get('user');
   const viewingOwnProfile = !otherUserParam;
-  const canEdit = !!(
-    isAdmin || (currentUser && viewingOwnProfile) || (currentUser && currentUser.role === 'buyer' && profile && profile.role === 'farmer')
-  );
+  const canEdit = !!(isAdmin || (currentUser && viewingOwnProfile));
 
   return (
     <div className="container py-4 pb-5">
@@ -346,7 +355,40 @@ export default function ProfilePage({ lang = 'en' }) {
                   <h5 className="fw-bold">{profile.role === 'farmer' ? 'Active Listings' : 'Requested Products'}</h5>
                 </div>
                 <div className="card-body p-4">
-                  {products && products.length > 0 ? (
+                  {profile.role === 'farmer' ? (
+                    listings.length > 0 ? (
+                      <div className="table-responsive">
+                        <table className="table align-middle">
+                          <thead className="table-light">
+                            <tr>
+                              <th className="text-muted small text-uppercase fw-semibold border-0 rounded-start">Crop</th>
+                              <th className="text-muted small text-uppercase fw-semibold border-0">Quantity</th>
+                              <th className="text-muted small text-uppercase fw-semibold border-0">Market</th>
+                              <th className="text-end text-muted small text-uppercase fw-semibold border-0 rounded-end">Price</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {listings.map((listing) => (
+                              <tr key={listing.id} className="border-bottom">
+                                <td className="py-3 border-0">
+                                  <div className="fw-bold text-dark">{listing.crop}</div>
+                                </td>
+                                <td className="py-3 border-0">
+                                  <span className="badge bg-light text-dark border">{listing.quantity ?? '—'} {listing.unit || 'kg'}</span>
+                                </td>
+                                <td className="py-3 border-0">{listing.market || 'Open market'}</td>
+                                <td className="py-3 text-end border-0 fw-semibold text-success">KSh {listing.price}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-5 bg-light rounded-4 text-muted">
+                        No listings currently available.
+                      </div>
+                    )
+                  ) : products && products.length > 0 ? (
                     <div className="table-responsive">
                       <table className="table align-middle">
                         <thead className="table-light">

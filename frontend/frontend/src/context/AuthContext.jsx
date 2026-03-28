@@ -1,7 +1,8 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useEffect, useState } from 'react';
-import { fetchProfile, loadAuthToken, setAuthToken } from '../lib/api';
+import { clearAuthSession, fetchProfile, isSessionExpired, loadAuthToken, SESSION_TIMEOUT_MS, setAuthToken, touchSessionActivity } from '../lib/api';
 
-export const AuthContext = createContext({ user: null, isAuth: false, setToken: () => {} });
+export const AuthContext = createContext({ user: null, isAuth: false, setToken: () => {}, logout: () => {} });
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -26,8 +27,7 @@ export function AuthProvider({ children }) {
       setUser(p);
       setIsAuth(true);
     }).catch(() => {
-      // invalid token
-      setAuthToken(null);
+      clearAuthSession();
       setUser(null);
       setIsAuth(false);
     }).finally(() => { if (mounted) setLoading(false); });
@@ -47,13 +47,62 @@ export function AuthProvider({ children }) {
       setUser(p);
       setIsAuth(true);
     }).catch(() => {
+      clearAuthSession();
       setUser(null);
       setIsAuth(false);
     });
   }
 
+  function logout(message = null) {
+    clearAuthSession(message);
+    setUser(null);
+    setIsAuth(false);
+  }
+
+  useEffect(() => {
+    function syncAuthState() {
+      const token = loadAuthToken();
+      if (!token) {
+        setUser(null);
+        setIsAuth(false);
+      }
+    }
+
+    window.addEventListener('auth:changed', syncAuthState);
+    return () => {
+      window.removeEventListener('auth:changed', syncAuthState);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isAuth) return undefined;
+
+    const activityEvents = ['click', 'keydown', 'mousemove', 'scroll', 'touchstart', 'visibilitychange'];
+    const handleActivity = () => {
+      if (document.visibilityState && document.visibilityState === 'hidden') return;
+      touchSessionActivity();
+    };
+
+    for (const eventName of activityEvents) {
+      window.addEventListener(eventName, handleActivity, { passive: true });
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (isSessionExpired()) {
+        logout('Your session timed out due to inactivity. Please log in again.');
+      }
+    }, Math.min(60000, SESSION_TIMEOUT_MS));
+
+    return () => {
+      for (const eventName of activityEvents) {
+        window.removeEventListener(eventName, handleActivity);
+      }
+      window.clearInterval(intervalId);
+    };
+  }, [isAuth]);
+
   return (
-    <AuthContext.Provider value={{ user, isAuth, setToken, loading }}>
+    <AuthContext.Provider value={{ user, isAuth, setToken, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

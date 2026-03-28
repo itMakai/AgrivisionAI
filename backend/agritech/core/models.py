@@ -161,6 +161,7 @@ class Booking(models.Model):
     farmer = models.ForeignKey('auth.User', on_delete=models.CASCADE)
     provider = models.ForeignKey(ServiceProvider, on_delete=models.CASCADE)
     service = models.ForeignKey(Service, on_delete=models.CASCADE)
+    listing = models.ForeignKey('Listing', on_delete=models.SET_NULL, null=True, blank=True, related_name='transport_bookings')
     market = models.ForeignKey(Market, on_delete=models.SET_NULL, null=True, blank=True)
     scheduled_date = models.DateField(null=True, blank=True)
     quantity = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)

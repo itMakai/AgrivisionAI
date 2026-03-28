@@ -47,7 +47,7 @@ def _weather_payload(city="Makueni"):
         return {
             "source": "generated-fallback",
             "city": city,
-            "current": {"temp": 27.5, "humidity": 63, "description": "partly cloudy"},
+            "current": {"temp": 27.5, "humidity": 63, "wind_speed": 11.0, "wind": 11.0, "description": "partly cloudy"},
             "daily": [
                 {
                     "date": str((timezone.now() + timedelta(days=offset)).date()),
@@ -118,12 +118,14 @@ def _weather_payload(city="Makueni"):
             params={"q": city, "appid": api_key, "units": "metric"},
             timeout=10,
         )
-        current = {"temp": 27.0, "humidity": 60, "description": "clear"}
+        current = {"temp": 27.0, "humidity": 60, "wind_speed": 10.0, "wind": 10.0, "description": "clear"}
         if current_resp.status_code == 200:
             cdata = current_resp.json() or {}
             current = {
                 "temp": cdata.get("main", {}).get("temp"),
                 "humidity": cdata.get("main", {}).get("humidity"),
+                "wind_speed": cdata.get("wind", {}).get("speed"),
+                "wind": cdata.get("wind", {}).get("speed"),
                 "description": (cdata.get("weather") or [{}])[0].get("description"),
             }
 
@@ -132,7 +134,7 @@ def _weather_payload(city="Makueni"):
         return {
             "source": "generated-fallback",
             "city": city,
-            "current": {"temp": 27.5, "humidity": 63, "description": "partly cloudy"},
+            "current": {"temp": 27.5, "humidity": 63, "wind_speed": 11.0, "wind": 11.0, "description": "partly cloudy"},
             "daily": [
                 {
                     "date": str((timezone.now() + timedelta(days=offset)).date()),
@@ -378,8 +380,13 @@ class TransportOptionsView(APIView):
         listing = None
         if listing_id:
             listing = get_object_or_404(Listing, id=listing_id)
+            if not request.user.is_staff and listing.owner_id != request.user.id:
+                return Response({'detail': 'You can only request transport options for your own listings'}, status=403)
 
-        transport_services = Service.objects.select_related("provider").filter(service_type="transport", provider__offers_transport=True)
+        # A provider may already have a transport service record even if the
+        # capability flag has not been toggled on its profile yet. Use the
+        # service catalog as the source of truth for requestable providers.
+        transport_services = Service.objects.select_related("provider").filter(service_type="transport")
         out = []
         for service in transport_services:
             standard_price = None
@@ -411,7 +418,7 @@ class TransportRequestsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        qs = Booking.objects.select_related("provider", "service", "market", "farmer").filter(service__service_type="transport")
+        qs = Booking.objects.select_related("provider", "service", "market", "farmer", "listing", "listing__crop").filter(service__service_type="transport")
 
         # Scope by role:
         # - admins see all
@@ -432,6 +439,10 @@ class TransportRequestsView(APIView):
                 "farmer": item.farmer.username,
                 "provider": item.provider.name,
                 "service": item.service.title,
+                "listing_id": item.listing_id,
+                "listing_crop": item.listing.crop.name if item.listing and item.listing.crop_id else None,
+                "listing_quantity": float(item.listing.quantity) if item.listing and item.listing.quantity is not None else None,
+                "listing_unit": item.listing.unit if item.listing else None,
                 "market": item.market.name if item.market else None,
                 "scheduled_date": item.scheduled_date,
                 "quantity": float(item.quantity) if item.quantity is not None else None,
@@ -449,6 +460,7 @@ class TransportRequestsView(APIView):
 
         provider_id = request.data.get("provider_id")
         service_id = request.data.get("service_id")
+        listing_id = request.data.get("listing_id")
         market_id = request.data.get("market_id")
         quantity = request.data.get("quantity")
         scheduled_date = request.data.get("scheduled_date")
@@ -467,17 +479,30 @@ class TransportRequestsView(APIView):
         if service.service_type != "transport":
             return Response({"detail": "Selected service is not transport-enabled"}, status=400)
 
+        listing = None
+        if listing_id:
+            listing = get_object_or_404(Listing, id=listing_id)
+            if not request.user.is_staff and listing.owner_id != request.user.id:
+                return Response({"detail": "You can only create transport requests for your own listings"}, status=403)
+
         market = None
         if market_id:
             market = get_object_or_404(Market, id=market_id)
+        elif listing and listing.market_id:
+            market = listing.market
+
+        booking_quantity = quantity
+        if (booking_quantity is None or str(booking_quantity).strip() == "") and listing:
+            booking_quantity = listing.quantity
 
         booking = Booking.objects.create(
             farmer=request.user,
             provider=provider,
             service=service,
+            listing=listing,
             market=market,
             scheduled_date=scheduled_date or None,
-            quantity=quantity or None,
+            quantity=booking_quantity or None,
             status="pending",
         )
 
@@ -486,6 +511,7 @@ class TransportRequestsView(APIView):
                 "id": booking.id,
                 "provider": provider.name,
                 "service": service.title,
+                "listing_id": booking.listing_id,
                 "status": booking.status,
                 "scheduled_date": booking.scheduled_date,
                 "quantity": booking.quantity,
@@ -517,3 +543,11 @@ class TransportRequestStatusView(APIView):
         booking.status = new_status
         booking.save(update_fields=["status"])
         return Response({"id": booking.id, "status": booking.status})
+
+    def delete(self, request, booking_id):
+        booking = get_object_or_404(Booking, id=booking_id, service__service_type="transport")
+        if not request.user.is_staff:
+            return Response({"detail": "Only admins can delete service requests"}, status=403)
+        bid = booking.id
+        booking.delete()
+        return Response({"detail": f"Transport request {bid} deleted"})

@@ -3,6 +3,7 @@ from urllib.parse import parse_qs
 from channels.middleware import BaseMiddleware
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
+from api.authentication import token_has_expired
 
 
 @database_sync_to_async
@@ -11,6 +12,9 @@ def _get_user_from_token(token_key):
     from rest_framework.authtoken.models import Token
     try:
         token = Token.objects.select_related('user').get(key=token_key)
+        if token_has_expired(token):
+            token.delete()
+            return AnonymousUser()
         return token.user
     except Token.DoesNotExist:
         return AnonymousUser()

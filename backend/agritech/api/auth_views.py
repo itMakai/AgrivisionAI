@@ -117,7 +117,8 @@ def register(request):
     else:
         FarmerProfile.objects.create(user=user, phone_number=phone or '', location=location)
 
-    token, _ = Token.objects.get_or_create(user=user)
+    Token.objects.filter(user=user).delete()
+    token = Token.objects.create(user=user)
     return Response(
         {
             'token': token.key,
@@ -139,7 +140,8 @@ def login(request):
     if not user:
         return Response({'detail': 'invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
 
-    token, _ = Token.objects.get_or_create(user=user)
+    Token.objects.filter(user=user).delete()
+    token = Token.objects.create(user=user)
     return Response(
         {
             'token': token.key,
@@ -197,7 +199,7 @@ def profile(request):
         try:
             bp = BuyerProfile.objects.get(user=user)
             profile_obj = bp
-            data.update({'role': 'buyer', 'phone_number': bp.phone_number, 'verified': bp.verified, 'description': bp.description, 'has_transport': bp.has_transport, 'transport_capacity': bp.transport_capacity, 'transport_unit': bp.transport_unit, 'rating': bp.rating, 'rating_count': Rating.objects.filter(target=user).count(), 'products': bp.products or []})
+            data.update({'role': 'buyer', 'phone_number': bp.phone_number, 'verified': bp.verified, 'description': bp.description, 'has_transport': bp.has_transport, 'transport_capacity': bp.transport_capacity, 'transport_unit': bp.transport_unit, 'location': bp.location, 'rating': bp.rating, 'rating_count': Rating.objects.filter(target=user).count(), 'products': bp.products or []})
             if bp.profile_image:
                 data['profile_image'] = request.build_absolute_uri(bp.profile_image.url)
         except BuyerProfile.DoesNotExist:

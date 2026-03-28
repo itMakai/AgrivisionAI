@@ -4,7 +4,6 @@ import {
   fetchPlatformAuth,
   fetchPlatformMarketplace,
   fetchPlatformAnalytics,
-  fetchTransportRequests,
 } from '../lib/api';
 import PriceTrendChart from '../components/PriceTrendChart';
 import WeatherChart from '../components/WeatherChart';
@@ -66,7 +65,6 @@ export default function AgriControlCenter() {
   const [authData, setAuthData] = useState(null);
   const [marketData, setMarketData] = useState(null);
   const [aiData, setAiData] = useState(null);
-  const [transportRequests, setTransportRequests] = useState([]);
 
   useEffect(() => {
     let mounted = true;
@@ -77,15 +75,13 @@ export default function AgriControlCenter() {
       fetchPlatformAuth(),
       fetchPlatformMarketplace(),
       fetchPlatformAnalytics(),
-      fetchTransportRequests().catch(() => []),
     ])
-      .then(([o, a, m, ai, transport]) => {
+      .then(([o, a, m, ai]) => {
         if (!mounted) return;
         setOverview(o);
         setAuthData(a);
         setMarketData(m);
         setAiData(ai);
-        setTransportRequests(transport || []);
       })
       .catch((err) => {
         if (!mounted) return;
@@ -110,7 +106,7 @@ export default function AgriControlCenter() {
       { label: 'Agro-Advisories', value: (aiData?.advisories || []).length, icon: '💡', bgColor: 'bg-danger-subtle', textColor: 'text-danger' },
       { label: 'Profile Completion', value: `${d1.profile_completion_pct ?? 0}%`, icon: '⭐', bgColor: 'bg-secondary-subtle', textColor: 'text-secondary' },
     ];
-  }, [authData, marketData, aiData, transportRequests]);
+  }, [authData, marketData, aiData]);
 
   if (loading) {
     return (
@@ -372,7 +368,7 @@ function AiPanel({ data }) {
               <div className="border-end border-white border-opacity-25"></div>
               <div className="flex-fill text-center">
                 <div className="small opacity-75">Wind</div>
-                <div className="fw-bold fs-5">{weather?.current?.wind ?? '--'} km/h</div>
+                <div className="fw-bold fs-5">{weather?.current?.wind_speed ?? '--'} km/h</div>
               </div>
             </div>
 

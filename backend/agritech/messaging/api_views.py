@@ -209,3 +209,26 @@ class GetOrCreateConversationAPIView(APIView):
         serializer = ConversationSerializer(conv)
         return Response(serializer.data)
 
+
+class MessageDeleteAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, message_id):
+        msg = get_object_or_404(Message, id=message_id)
+        if not request.user.is_staff and msg.sender_id != request.user.id:
+            return Response({'detail': 'You can only delete your own sent messages'}, status=status.HTTP_403_FORBIDDEN)
+
+        conv_id = msg.conversation_id
+        msg_id = msg.id
+        msg.delete()
+
+        # Push best-effort notification to clients so message can be removed from open chat views.
+        try:
+            payload = {'type': 'message_deleted', 'id': msg_id, 'conversation': conv_id}
+            from .tasks import broadcast_chat_message
+            broadcast_chat_message.delay(conv_id, payload)
+        except Exception:
+            pass
+
+        return Response({'detail': 'Message deleted', 'id': msg_id})
+

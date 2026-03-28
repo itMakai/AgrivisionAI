@@ -1,6 +1,7 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
 import {
   createTransportRequest,
+  deleteTransportRequestAsAdmin,
   fetchListings,
   fetchMarkets,
   fetchTransportOptions,
@@ -110,10 +111,15 @@ export default function TransportPage() {
       setOptions([]);
       return;
     }
+    const listing = listings.find((row) => String(row.id) === String(selectedListing));
+    if (listing) {
+      setQuantity(String(listing.quantity ?? ''));
+    }
+    setSelectedOption('');
     fetchTransportOptions({ listing_id: selectedListing })
       .then((rows) => setOptions(rows || []))
       .catch(() => setOptions([]));
-  }, [selectedListing, isProvider]);
+  }, [selectedListing, isProvider, listings]);
 
   async function handleCreateRequest(e) {
     e.preventDefault();
@@ -125,6 +131,7 @@ export default function TransportPage() {
       await createTransportRequest({
         provider_id: option.provider_id,
         service_id: option.service_id,
+        listing_id: selectedListing,
         market_id: selectedMarket || undefined,
         quantity: quantity || undefined,
         scheduled_date: scheduledDate || undefined,
@@ -144,6 +151,11 @@ export default function TransportPage() {
 
   async function changeStatus(id, status) {
     await updateTransportRequestStatus(id, status);
+    await loadAll();
+  }
+
+  async function deleteRequest(id) {
+    await deleteTransportRequestAsAdmin(id);
     await loadAll();
   }
 
@@ -256,6 +268,7 @@ export default function TransportPage() {
                       <tr>
                         <th>Req ID</th>
                         <th>Provider & Service</th>
+                        <th>Listing</th>
                         {isProvider ? <th>Requester</th> : null}
                         <th>Qty</th>
                         <th>Status</th>
@@ -269,6 +282,16 @@ export default function TransportPage() {
                           <td>
                             <div className="fw-bold text-dark">{row.provider}</div>
                             <div className="small text-muted">{row.service}</div>
+                          </td>
+                          <td>
+                            {row.listing_crop ? (
+                              <>
+                                <div className="fw-medium">{row.listing_crop}</div>
+                                <div className="small text-muted">#{row.listing_id} {row.listing_quantity ?? '—'} {row.listing_unit || ''}</div>
+                              </>
+                            ) : (
+                              <span className="text-muted small">Manual request</span>
+                            )}
                           </td>
                           {isProvider ? <td className="fw-medium">{row.farmer}</td> : null}
                           <td className="fw-medium">{row.quantity ?? '—'}</td>
@@ -294,6 +317,11 @@ export default function TransportPage() {
                                   ) : (
                                     <span className="text-muted small fst-italic">—</span>
                                   )}
+                                  {isAdmin ? (
+                                    <button className="btn btn-sm btn-outline-danger rounded-pill px-3 shadow-sm fw-semibold" onClick={() => deleteRequest(row.id)}>
+                                      Delete
+                                    </button>
+                                  ) : null}
                                 </>
                               ) : (
                                 <>
@@ -321,4 +349,3 @@ export default function TransportPage() {
     </div>
   );
 }
-

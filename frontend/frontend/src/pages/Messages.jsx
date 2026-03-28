@@ -1,5 +1,4 @@
-﻿import React, { useContext, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useContext, useEffect, useState } from 'react';
 import { fetchFarmers, fetchBuyers, getOrCreateConversationWithUser } from '../lib/api';
 import MessageModal from '../components/MessageModal';
 import { AuthContext } from '../context/AuthContext';
@@ -9,7 +8,7 @@ import { AuthContext } from '../context/AuthContext';
  * Users can search for other platform users and open a real-time WebSocket chat.
  */
 export default function MessagesPage() {
-  const { user, isAuth } = useContext(AuthContext);
+  const { user } = useContext(AuthContext);
   const [search, setSearch] = useState('');
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -37,11 +36,11 @@ export default function MessagesPage() {
             location: b.location || '',
           })),
         ];
-        // Remove current user and deduplicate
+
         const seen = new Set();
-        const filtered = all.filter((u) => {
-          if (!u.id || seen.has(u.id) || u.username === user?.username) return false;
-          seen.add(u.id);
+        const filtered = all.filter((entry) => {
+          if (!entry.id || seen.has(entry.id) || entry.username === user?.username) return false;
+          seen.add(entry.id);
           return true;
         });
         setUsers(filtered);
@@ -50,21 +49,21 @@ export default function MessagesPage() {
       .finally(() => setLoading(false));
   }, [user]);
 
-  async function startChat(u) {
+  async function startChat(selectedUser) {
     try {
-      const conv = await getOrCreateConversationWithUser(u.id);
+      const conv = await getOrCreateConversationWithUser(selectedUser.id);
       setOpenConvId(conv.id);
-      setOpenName(u.label || u.username);
-    } catch (_e) {
+      setOpenName(selectedUser.label || selectedUser.username);
+    } catch {
       setError('Could not start conversation');
     }
   }
 
   const filtered = search.trim()
     ? users.filter(
-        (u) =>
-          (u.label || '').toLowerCase().includes(search.toLowerCase()) ||
-          (u.location || '').toLowerCase().includes(search.toLowerCase()),
+        (entry) =>
+          (entry.label || '').toLowerCase().includes(search.toLowerCase()) ||
+          (entry.location || '').toLowerCase().includes(search.toLowerCase()),
       )
     : users;
 
@@ -77,7 +76,7 @@ export default function MessagesPage() {
           className="form-control"
           placeholder="Search users by name or location…"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(event) => setSearch(event.target.value)}
         />
       </div>
 
@@ -89,13 +88,13 @@ export default function MessagesPage() {
       )}
 
       <div className="list-group">
-        {filtered.map((u) => (
-          <div key={u.id} className="list-group-item d-flex justify-content-between align-items-center">
+        {filtered.map((entry) => (
+          <div key={entry.id} className="list-group-item d-flex justify-content-between align-items-center">
             <div>
-              <div className="fw-semibold">{u.label}</div>
-              <div className="small text-muted">{u.role}{u.location ? ` · ${u.location}` : ''}</div>
+              <div className="fw-semibold">{entry.label}</div>
+              <div className="small text-muted">{entry.role}{entry.location ? ` · ${entry.location}` : ''}</div>
             </div>
-            <button className="btn btn-sm btn-primary" onClick={() => startChat(u)}>
+            <button className="btn btn-sm btn-primary" onClick={() => startChat(entry)}>
               Chat
             </button>
           </div>

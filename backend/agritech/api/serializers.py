@@ -72,7 +72,7 @@ class StandardPriceSerializer(serializers.ModelSerializer):
 class BookingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
-        fields = ['id', 'farmer', 'provider', 'service', 'market', 'scheduled_date', 'quantity', 'status', 'created_at']
+        fields = ['id', 'farmer', 'provider', 'service', 'listing', 'market', 'scheduled_date', 'quantity', 'status', 'created_at']
         read_only_fields = ['farmer', 'status', 'created_at']
 
 

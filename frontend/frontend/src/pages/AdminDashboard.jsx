@@ -1,7 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { createAdminManagedUser, fetchAdminMetrics, fetchAdminUsers } from '../lib/api';
+import { useNavigate } from 'react-router-dom';
+import {
+  createAdminManagedUser,
+  deleteAdminManagedUser,
+  deleteTransportRequestAsAdmin,
+  fetchAdminMetrics,
+  fetchAdminUsers,
+  moderateTransportRequest,
+  updateAdminManagedUser,
+} from '../lib/api';
 
 export default function AdminDashboard() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [data, setData] = useState(null);
@@ -22,6 +32,60 @@ export default function AdminDashboard() {
 
   function loadUsers() {
     return fetchAdminUsers().then((u) => setUsers(u?.results || []));
+  }
+
+  async function approveTransportRequest(id) {
+    setError('');
+    try {
+      const updated = await moderateTransportRequest(id, { status: 'accepted' });
+      setData((prev) => ({
+        ...prev,
+        recent: {
+          ...(prev?.recent || {}),
+          transport_requests: (prev?.recent?.transport_requests || []).map((r) =>
+            r.id === id ? { ...r, status: updated.status } : r,
+          ),
+        },
+      }));
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Failed to approve request');
+    }
+  }
+
+  async function deleteTransportRequest(id) {
+    setError('');
+    try {
+      await deleteTransportRequestAsAdmin(id);
+      setData((prev) => ({
+        ...prev,
+        recent: {
+          ...(prev?.recent || {}),
+          transport_requests: (prev?.recent?.transport_requests || []).filter((r) => r.id !== id),
+        },
+      }));
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Failed to delete request');
+    }
+  }
+
+  async function deactivateUser(id, isActive) {
+    setError('');
+    try {
+      const updated = await updateAdminManagedUser(id, { is_active: !isActive });
+      setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, is_active: updated.is_active } : u)));
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Failed to update user status');
+    }
+  }
+
+  async function deleteUser(id) {
+    setError('');
+    try {
+      await deleteAdminManagedUser(id);
+      setUsers((prev) => prev.filter((u) => u.id !== id));
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Failed to delete user');
+    }
   }
 
   useEffect(() => {
@@ -66,7 +130,6 @@ export default function AdminDashboard() {
   }
 
   if (loading) return <div>Loading admin dashboard...</div>;
-  if (error) return <div className="alert alert-danger">{error}</div>;
   if (!data) return <div className="text-muted">No data.</div>;
 
   const totals = data.totals || {};
@@ -74,7 +137,13 @@ export default function AdminDashboard() {
 
   return (
     <div className="container py-3">
-      <h2 className="h4 mb-3">Administration</h2>
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h2 className="h4 mb-0">Administration</h2>
+        <button className="btn btn-outline-primary btn-sm" onClick={() => navigate('/admin/recent-messages')}>
+          Open Recent Messages
+        </button>
+      </div>
+      {error ? <div className="alert alert-danger py-2">{error}</div> : null}
 
       <div className="row g-3 mb-4">
         {Object.entries(totals).map(([k, v]) => (
@@ -90,7 +159,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="row g-3">
-        <div className="col-12 col-lg-6">
+        <div className="col-12">
           <div className="card app-card">
             <div className="card-body">
               <h6 className="mb-3">Recent transport requests</h6>
@@ -105,6 +174,7 @@ export default function AdminDashboard() {
                         <th>Status</th>
                         <th>Farmer</th>
                         <th>Provider</th>
+                        <th className="text-end">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -114,33 +184,18 @@ export default function AdminDashboard() {
                           <td>{r.status}</td>
                           <td>{r.farmer__username}</td>
                           <td>{r.provider__name}</td>
+                          <td className="text-end">
+                            <div className="d-flex justify-content-end gap-2">
+                              {r.status === 'pending' ? (
+                                <button className="btn btn-sm btn-outline-success" onClick={() => approveTransportRequest(r.id)}>Approve</button>
+                              ) : null}
+                              <button className="btn btn-sm btn-outline-danger" onClick={() => deleteTransportRequest(r.id)}>Delete</button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="col-12 col-lg-6">
-          <div className="card app-card">
-            <div className="card-body">
-              <h6 className="mb-3">Recent messages</h6>
-              {(recent.messages || []).length === 0 ? (
-                <div className="text-muted small">No recent messages.</div>
-              ) : (
-                <div className="list-group">
-                  {recent.messages.map((m) => (
-                    <div key={m.id} className="list-group-item">
-                      <div className="d-flex justify-content-between gap-2">
-                        <div className="small text-muted">{m.conversation__channel} - {m.sender__username || 'external'}</div>
-                        <div className="small text-muted">{new Date(m.created_at).toLocaleString()}</div>
-                      </div>
-                      <div className="small">{String(m.body || '').slice(0, 140)}</div>
-                    </div>
-                  ))}
                 </div>
               )}
             </div>
@@ -272,6 +327,7 @@ export default function AdminDashboard() {
                         <th>Role</th>
                         <th>Email</th>
                         <th>Status</th>
+                        <th className="text-end">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -281,6 +337,14 @@ export default function AdminDashboard() {
                           <td className="text-capitalize">{u.role}</td>
                           <td>{u.email || '—'}</td>
                           <td>{u.is_active ? 'Active' : 'Disabled'}</td>
+                          <td className="text-end">
+                            <div className="d-flex justify-content-end gap-2">
+                              <button className="btn btn-sm btn-outline-secondary" onClick={() => deactivateUser(u.id, u.is_active)}>
+                                {u.is_active ? 'Deactivate' : 'Activate'}
+                              </button>
+                              <button className="btn btn-sm btn-outline-danger" onClick={() => deleteUser(u.id)}>Delete</button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

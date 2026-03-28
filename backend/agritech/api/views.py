@@ -78,6 +78,7 @@ class BuyerListView(APIView):
                 'has_transport': b.has_transport,
                 'transport_capacity': b.transport_capacity,
                 'transport_unit': b.transport_unit,
+                'location': b.location,
                 'rating': b.rating,
                 'verified': b.verified,
             })
@@ -126,6 +127,7 @@ class ProfileDetailView(APIView):
                 'has_transport': b.has_transport,
                 'transport_capacity': b.transport_capacity,
                 'transport_unit': b.transport_unit,
+                'location': b.location,
                 'rating': b.rating,
                 'verified': b.verified,
             }
@@ -254,8 +256,14 @@ class ListingViewSet(viewsets.ModelViewSet):
         # - q=<search term> (crop/market/owner)
         # optional filter by owner
         owner = self.request.query_params.get('owner')
-        if owner == 'me' and self.request.user.is_authenticated:
-            qs = qs.filter(owner=self.request.user)
+        if owner:
+            if owner == 'me' and self.request.user.is_authenticated:
+                qs = qs.filter(owner=self.request.user)
+            else:
+                try:
+                    qs = qs.filter(owner_id=int(owner))
+                except Exception:
+                    qs = qs.filter(owner__username__iexact=owner)
 
         active = self.request.query_params.get("active")
         if active is not None and str(active).strip() != "":
@@ -453,6 +461,7 @@ class RealTimeWeatherView(APIView):
                     current = {
                         'temp': cdata.get('main', {}).get('temp'),
                         'humidity': cdata.get('main', {}).get('humidity'),
+                        'wind': cdata.get('wind', {}).get('speed'),
                         'wind_speed': cdata.get('wind', {}).get('speed'),
                         'description': cdata.get('weather', [{}])[0].get('description')
                     }

@@ -162,6 +162,8 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 OPENWEATHER_API_KEY = os.getenv('OPENWEATHER_API_KEY')
+SESSION_TIMEOUT_MINUTES = int(os.getenv('SESSION_TIMEOUT_MINUTES', '60'))
+SESSION_TIMEOUT_SECONDS = SESSION_TIMEOUT_MINUTES * 60
 
 # Celery configuration (uses Redis as broker)
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://127.0.0.1:6379/0')
@@ -182,7 +184,7 @@ CORS_ALLOW_ALL_ORIGINS = True
 # REST framework and authentication
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
+        'api.authentication.ExpiringTokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [

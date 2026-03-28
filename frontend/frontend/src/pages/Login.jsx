@@ -1,5 +1,5 @@
-import React, { useState, useContext } from 'react';
-import { loginUser } from '../lib/api';
+import React, { useEffect, useState, useContext } from 'react';
+import { consumeSessionNotice, loginUser } from '../lib/api';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 
@@ -11,6 +11,13 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { setToken } = useContext(AuthContext);
+
+  useEffect(() => {
+    const sessionNotice = consumeSessionNotice();
+    if (sessionNotice) {
+      setError(sessionNotice);
+    }
+  }, []);
 
   async function onSubmit(e) {
     e.preventDefault();

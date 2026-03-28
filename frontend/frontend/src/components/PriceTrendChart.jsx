@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -16,7 +16,6 @@ import { fetchPlatformAnalytics } from '../lib/api';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
 export default function PriceTrendChart({ lang, predictions = null, title = null }) {
-  const chartRef = useRef(null);
   const [rows, setRows] = useState(predictions || []);
 
   useEffect(() => {
@@ -80,19 +79,9 @@ export default function PriceTrendChart({ lang, predictions = null, title = null
     labels: labels.length ? labels : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     datasets,
   };
-
-  useEffect(() => {
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-      }
-    };
-  }, []);
-
   return (
     <div className="card">
       <Line
-        ref={chartRef}
         data={data}
         options={{
           responsive: true,

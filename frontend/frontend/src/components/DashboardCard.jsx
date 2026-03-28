@@ -1,6 +1,6 @@
 import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 
-export default function DashboardCard({ title, value, market, trend, desc, color = "primary" }) {
+export default function DashboardCard({ title, value, market, trend, desc }) {
   return (
     <div className="card app-card card-compact">
       <div className="d-flex justify-content-between align-items-start">

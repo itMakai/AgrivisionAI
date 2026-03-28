@@ -27,7 +27,7 @@ export default function AddProviderPage() {
         address,
         verified,
       };
-      const res = await createProvider(payload);
+      await createProvider(payload);
       // Navigate to providers list or service detail
       navigate('/providers');
     } catch (err) {

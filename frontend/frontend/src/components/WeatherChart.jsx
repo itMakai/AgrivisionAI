@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -17,7 +17,6 @@ import { fetchRealTimeWeather } from '../lib/api';
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, Title, Tooltip, Legend);
 
 export default function WeatherChart({ lang, weatherData = null }) {
-  const chartRef = useRef(null);
   const [daily, setDaily] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -78,16 +77,13 @@ export default function WeatherChart({ lang, weatherData = null }) {
 
     return () => {
       mounted = false;
-      if (chartRef.current) {
-        try { chartRef.current.destroy(); } catch (e) { /* ignore */ }
-      }
     };
   }, [weatherData]);
 
   return (
     <div className="card">
+      {loading ? <div className="small text-muted px-3 pt-3">Loading weather data...</div> : null}
       <Bar
-        ref={chartRef}
         data={data}
         options={{
           responsive: true,

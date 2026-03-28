@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import api, { fetchServices } from '../lib/api';
+import api from '../lib/api';
 import BookingForm from '../components/BookingForm';
 
 export default function ServiceDetail() {

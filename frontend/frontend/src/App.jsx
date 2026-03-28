@@ -15,6 +15,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import ProfilePage from './pages/Profile';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminRecentMessages from './pages/AdminRecentMessages';
 
 function isAdminUser(user) {
   return !!(user && (user.is_staff || user.is_superuser || user?.privileges?.is_admin || user.role === 'admin'));
@@ -171,6 +172,7 @@ function App() {
             <Route path="/transport" element={<RequireRoles roles={['farmer', 'buyer', 'provider']}><TransportPage /></RequireRoles>} />
             <Route path="/profile" element={<RequireAuth><ProfilePage lang="en" /></RequireAuth>} />
             <Route path="/admin-dashboard" element={<RequireAdmin><AdminDashboard /></RequireAdmin>} />
+            <Route path="/admin/recent-messages" element={<RequireAdmin><AdminRecentMessages /></RequireAdmin>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

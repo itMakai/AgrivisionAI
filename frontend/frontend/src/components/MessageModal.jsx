@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef, useContext } from 'react';
-import { fetchConversation, fetchConversationById, getOrCreateConversationWithUser, openChatSocket } from '../lib/api';
+import { deleteMessageById, fetchConversation, fetchConversationById, getOrCreateConversationWithUser, openChatSocket } from '../lib/api';
 import { AuthContext } from '../context/AuthContext';
 
-export default function MessageModal({ open, onClose, phone, displayName, conversationId: propConversationId, otherUserId }) {
+export default function MessageModal({ open, onClose, phone, displayName, conversationId: propConversationId, otherUserId, onConversationChanged }) {
   const { user } = useContext(AuthContext);
   const [messages, setMessages] = useState([]);
   const [body, setBody] = useState('');
@@ -11,6 +11,7 @@ export default function MessageModal({ open, onClose, phone, displayName, conver
   const listRef = useRef(null);
   const wsRef = useRef(null);
   const [conversationId, setConversationId] = useState(propConversationId || null);
+  const [deletingId, setDeletingId] = useState(null);
 
   // Sync conversationId when prop changes
   useEffect(() => {
@@ -55,7 +56,7 @@ export default function MessageModal({ open, onClose, phone, displayName, conver
           if (convId && mounted) setConversationId(convId);
         }
         if (mounted && data) setMessages(data.messages || []);
-      } catch (_e) {
+      } catch {
         // Ignore history load errors — the WS will still deliver new messages
       } finally {
         if (mounted) setLoading(false);
@@ -65,7 +66,7 @@ export default function MessageModal({ open, onClose, phone, displayName, conver
     loadAndConnect();
 
     return () => { mounted = false; };
-  }, [open, phone, otherUserId]);
+  }, [open, phone, otherUserId, conversationId]);
 
   // Connect WebSocket whenever we have a resolved conversationId and the modal is open
   useEffect(() => {
@@ -83,12 +84,16 @@ export default function MessageModal({ open, onClose, phone, displayName, conver
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
+        if (msg?.type === 'message_deleted' && msg?.id) {
+          setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+          return;
+        }
         setMessages((prev) => {
           // Deduplicate by id (the server echoes our own sends back)
           if (prev.some((m) => m.id === msg.id)) return prev;
           return [...prev, msg];
         });
-      } catch (_e) { /* ignore malformed frames */ }
+      } catch { /* ignore malformed frames */ }
     };
 
     ws.onerror = () => setError('Connection error. Messages may be delayed.');
@@ -118,8 +123,23 @@ export default function MessageModal({ open, onClose, phone, displayName, conver
       ws.send(JSON.stringify({ body: text }));
       setBody('');
       setError(null);
+      onConversationChanged?.();
     } else {
       setError('Not connected. Please wait and try again.');
+    }
+  }
+
+  async function handleDeleteMessage(id) {
+    setError(null);
+    setDeletingId(id);
+    try {
+      await deleteMessageById(id);
+      setMessages((prev) => prev.filter((m) => m.id !== id));
+      onConversationChanged?.();
+    } catch (e) {
+      setError(e?.response?.data?.detail || 'Failed to delete message');
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -128,10 +148,13 @@ export default function MessageModal({ open, onClose, phone, displayName, conver
   return (
     <div style={overlayStyle}>
       <div style={modalStyle}>
-        <div style={headerStyle}>
-          <div>
-            <strong>Chat</strong>
-            <div style={{ fontSize: 13, color: '#555' }}>{displayName || phone}</div>
+        <div style={headerStyle} className="border-bottom pb-2 mb-1">
+          <div className="d-flex align-items-center gap-2">
+            <div style={avatarStyle}>{String(displayName || phone || 'C').slice(0, 1).toUpperCase()}</div>
+            <div>
+              <strong>{displayName || phone || 'Chat'}</strong>
+              <div style={{ fontSize: 12, color: '#64748b' }}>{conversationId ? 'Conversation active' : 'Opening conversation...'}</div>
+            </div>
           </div>
           <button className="btn btn-sm btn-light" onClick={onClose}>✕</button>
         </div>
@@ -147,6 +170,7 @@ export default function MessageModal({ open, onClose, phone, displayName, conver
             const isMine = senderId
               ? String(senderId) === String(user?.id)
               : !m.inbound;
+            const canDelete = isMine || !!user?.is_staff;
             const senderLabel = senderName || (isMine ? (user?.username || 'You') : (displayName || 'Unknown sender'));
 
             return (
@@ -156,8 +180,21 @@ export default function MessageModal({ open, onClose, phone, displayName, conver
                     {senderLabel}
                   </div>
                   <div>{m.body}</div>
-                  <div style={isMine ? timeMineStyle : timeOtherStyle}>
-                    {m.created_at ? new Date(m.created_at).toLocaleTimeString() : ''}
+                  <div style={metaRowStyle}>
+                    <div style={isMine ? timeMineStyle : timeOtherStyle}>
+                      {m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </div>
+                    {canDelete ? (
+                      <button
+                        type="button"
+                        className="btn btn-link btn-sm p-0"
+                        style={deleteBtnStyle}
+                        onClick={() => handleDeleteMessage(m.id)}
+                        disabled={deletingId === m.id}
+                      >
+                        {deletingId === m.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -187,15 +224,27 @@ const overlayStyle = {
   display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200,
 };
 const modalStyle = {
-  width: 420, maxHeight: '80vh', background: '#fff', borderRadius: 8,
+  width: 520, maxWidth: '96vw', maxHeight: '86vh', background: '#fff', borderRadius: 12,
   display: 'flex', flexDirection: 'column', padding: 16, gap: 4,
+  boxShadow: '0 20px 48px rgba(15, 23, 42, 0.25)',
+};
+const avatarStyle = {
+  width: 34,
+  height: 34,
+  borderRadius: '50%',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: 'linear-gradient(135deg, #0f6b4b, #0b5a3f)',
+  color: '#fff',
+  fontWeight: 700,
 };
 const headerStyle = {
   display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
 };
 const listStyle = {
   flex: 1, overflowY: 'auto', marginTop: 8, padding: 8,
-  background: '#f5f7fa', borderRadius: 6, minHeight: 120, maxHeight: 400,
+  background: 'linear-gradient(180deg, #f1f5f9, #f8fafc)', borderRadius: 10, minHeight: 160, maxHeight: 480,
   display: 'flex', flexDirection: 'column', gap: 8,
 };
 const messageRowLeftStyle = {
@@ -206,11 +255,11 @@ const messageRowRightStyle = {
 };
 const inboundStyle = {
   background: '#fff', border: '1px solid #e2e8f0', padding: '6px 10px',
-  borderRadius: '0 12px 12px 12px', maxWidth: '80%',
+  borderRadius: '4px 12px 12px 12px', maxWidth: '82%',
 };
 const outboundStyle = {
-  background: '#2563eb', color: '#fff', padding: '6px 10px',
-  borderRadius: '12px 0 12px 12px', maxWidth: '80%', textAlign: 'right',
+  background: 'linear-gradient(135deg, #0f6b4b, #0b5a3f)', color: '#fff', padding: '6px 10px',
+  borderRadius: '12px 4px 12px 12px', maxWidth: '82%', textAlign: 'right',
 };
 const senderOtherStyle = {
   fontSize: 12, color: '#475569', marginBottom: 3, fontWeight: 600,
@@ -223,6 +272,18 @@ const timeOtherStyle = {
 };
 const timeMineStyle = {
   fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 4,
+};
+const metaRowStyle = {
+  marginTop: 4,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 8,
+};
+const deleteBtnStyle = {
+  color: '#94a3b8',
+  textDecoration: 'none',
+  fontSize: 11,
 };
 
 

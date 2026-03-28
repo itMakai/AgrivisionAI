@@ -1,9 +1,11 @@
 from django.contrib.auth import get_user_model
 from django.contrib.admin.models import LogEntry
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework import status
 
 from core.models import Booking, BuyerProfile, Conversation, FarmerProfile, Listing, Message, Service, ServiceProvider
 
@@ -102,6 +104,42 @@ class AdminUserManagementView(APIView):
         ]
         return Response({'results': payload, 'count': len(payload)})
 
+    def patch(self, request, user_id):
+        User = get_user_model()
+        user = get_object_or_404(User, id=user_id)
+
+        is_active = request.data.get('is_active')
+        make_admin = request.data.get('make_admin')
+
+        if is_active is not None:
+            user.is_active = bool(is_active)
+
+        if make_admin is not None:
+            should_be_admin = bool(make_admin)
+            user.is_staff = should_be_admin
+            user.is_superuser = should_be_admin
+
+        user.save(update_fields=['is_active', 'is_staff', 'is_superuser'])
+        return Response(
+            {
+                'id': user.id,
+                'username': user.username,
+                'is_active': user.is_active,
+                'is_staff': user.is_staff,
+                'is_superuser': user.is_superuser,
+                'role': _resolve_role(user),
+            }
+        )
+
+    def delete(self, request, user_id):
+        User = get_user_model()
+        user = get_object_or_404(User, id=user_id)
+        if user.id == request.user.id:
+            return Response({'detail': 'You cannot delete your own account from this endpoint'}, status=400)
+        username = user.username
+        user.delete()
+        return Response({'detail': f'User {username} deleted'})
+
     def post(self, request):
         User = get_user_model()
         username = (request.data.get('username') or '').strip()
@@ -177,4 +215,38 @@ class AdminUserManagementView(APIView):
             },
             status=201,
         )
+
+
+class AdminTransportRequestModerationView(APIView):
+    """Admin-only moderation of transport service requests."""
+
+    permission_classes = [IsAdminUser]
+
+    def patch(self, request, booking_id):
+        booking = get_object_or_404(Booking, id=booking_id, service__service_type='transport')
+        new_status = request.data.get('status')
+        allowed = {'pending', 'accepted', 'completed', 'cancelled'}
+        if new_status not in allowed:
+            return Response({'detail': 'Invalid status value'}, status=400)
+
+        booking.status = new_status
+        booking.save(update_fields=['status'])
+        return Response({'id': booking.id, 'status': booking.status})
+
+    def delete(self, request, booking_id):
+        booking = get_object_or_404(Booking, id=booking_id, service__service_type='transport')
+        bid = booking.id
+        booking.delete()
+        return Response({'detail': f'Transport request {bid} deleted'})
+
+
+class AdminMessageModerationView(APIView):
+    """Admin-only message deletion endpoint."""
+
+    permission_classes = [IsAdminUser]
+
+    def delete(self, request, message_id):
+        msg = get_object_or_404(Message, id=message_id)
+        msg.delete()
+        return Response({'detail': 'Message deleted'})
 
