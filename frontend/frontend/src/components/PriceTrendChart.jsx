@@ -16,12 +16,13 @@ import { fetchPlatformAnalytics } from '../lib/api';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
 export default function PriceTrendChart({ lang, predictions = null, title = null }) {
-  const [rows, setRows] = useState(predictions || []);
+  const emptySeries = { labels: [], datasets: [] };
+  const [series, setSeries] = useState(predictions || emptySeries);
 
   useEffect(() => {
     let mounted = true;
-    if (predictions && predictions.length) {
-      setRows(predictions);
+    if (predictions && Array.isArray(predictions.labels) && Array.isArray(predictions.datasets)) {
+      setSeries(predictions);
       return () => {
         mounted = false;
       };
@@ -30,11 +31,11 @@ export default function PriceTrendChart({ lang, predictions = null, title = null
     fetchPlatformAnalytics()
       .then((data) => {
         if (!mounted) return;
-        setRows(data?.price_series || []);
+        setSeries(data?.price_series || emptySeries);
       })
       .catch(() => {
         if (!mounted) return;
-        setRows([]);
+        setSeries(emptySeries);
       });
 
     return () => {
@@ -42,41 +43,32 @@ export default function PriceTrendChart({ lang, predictions = null, title = null
     };
   }, [predictions]);
 
-  const labels = useMemo(() => {
-    const first = rows?.[0]?.points || [];
-    return first.map((point) => {
-      try {
-        return new Date(point.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      } catch {
-        return point.date;
-      }
-    });
-  }, [rows]);
+  const labels = useMemo(() => series?.labels || [], [series]);
+  const palette = ['#1E6B52', '#2563EB', '#F59E0B', '#DB2777', '#7C3AED', '#0EA5A4', '#DC2626', '#4F46E5'];
 
-  const palette = ['#1E6B52', '#2563EB', '#F59E0B', '#DB2777', '#7C3AED'];
-  const datasets = (rows || []).slice(0, 4).map((series, index) => ({
-    label: `${series.crop}`,
-    data: (series.points || []).map((point) => point.value),
-    borderColor: palette[index % palette.length],
-    backgroundColor: 'rgba(0,0,0,0)',
+  const datasets = (series?.datasets || []).map((dataset, index) => ({
+    label: dataset.label,
+    data: dataset.values || [],
+    borderColor: dataset.borderColor || palette[index % palette.length],
+    backgroundColor: dataset.backgroundColor || 'rgba(0,0,0,0)',
     tension: 0.35,
-    pointRadius: 3,
+    pointRadius: 4,
+    pointHoverRadius: 6,
+    fill: false,
   }));
 
   if (!datasets.length) {
-    datasets.push({
-      label: 'Maize',
-      data: [3200, 3400, 3800, 4200, 4800, 5200, 4900],
-      borderColor: '#1E6B52',
-      backgroundColor: 'rgba(30, 107, 82, 0.1)',
-      tension: 0.4,
-      pointBackgroundColor: '#F59E0B',
-      pointRadius: 4,
-    });
+    return (
+      <div className="card border-0 bg-light">
+        <div className="card-body text-center py-5 text-muted">
+          No active crop listings are available yet to compare price ranges.
+        </div>
+      </div>
+    );
   }
 
   const data = {
-    labels: labels.length ? labels : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    labels,
     datasets,
   };
   return (
@@ -88,7 +80,7 @@ export default function PriceTrendChart({ lang, predictions = null, title = null
           plugins: {
             title: {
               display: true,
-              text: title || (lang === 'sw' ? 'Utabiri wa Bei za Mazao' : 'Predicted Crop Prices'),
+              text: title || (lang === 'sw' ? 'Mstari wa Bei za Mazao' : 'Crop Price Range Lines'),
               font: { size: 18 }
             },
             legend: { display: true }
@@ -96,6 +88,12 @@ export default function PriceTrendChart({ lang, predictions = null, title = null
           scales: {
             y: {
               ticks: { callback: (value) => 'KSh ' + value.toLocaleString() }
+            },
+            x: {
+              title: {
+                display: true,
+                text: lang === 'sw' ? 'Kiwango cha Bei' : 'Price Range',
+              },
             }
           }
         }}

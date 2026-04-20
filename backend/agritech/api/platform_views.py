@@ -1,9 +1,8 @@
 from datetime import timedelta
-import random
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db.models import Avg, Count
+from django.db.models import Avg, Count, Max, Min
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -13,12 +12,10 @@ from rest_framework.views import APIView
 from core.models import (
     Booking,
     BuyerProfile,
-    Crop,
     FarmerInsight,
     FarmerProfile,
     Listing,
     Market,
-    PriceForecast,
     Service,
     ServiceProvider,
     StandardPrice,
@@ -146,49 +143,88 @@ def _weather_payload(city="Makueni"):
         }
 
 
-def _generated_price_predictions():
-    seeded = random.Random(2026)
-    crop_names = list(Crop.objects.values_list("name", flat=True)[:4]) or ["Maize", "Beans", "Tomato", "Onions"]
-    market_names = list(Market.objects.values_list("name", flat=True)[:3]) or ["Wote", "Emali", "Kibwezi"]
-    today = timezone.now().date()
-
-    rows = []
-    for crop_name in crop_names:
-        base = seeded.randint(2500, 5800)
-        for market_name in market_names:
-            slope = seeded.uniform(-2.8, 4.2)
-            for day in range(1, 8):
-                drift = slope * day
-                noise = seeded.uniform(-60, 60)
-                rows.append(
-                    {
-                        "date": str(today + timedelta(days=day)),
-                        "crop": crop_name,
-                        "market": market_name,
-                        "predicted_price": round(base + drift + noise, 2),
-                        "confidence": round(seeded.uniform(74, 93), 1),
-                        "source": "generated-model",
-                    }
-                )
-    return rows
+def _owner_role(user):
+    if hasattr(user, "farmerprofile"):
+        return "farmer"
+    if hasattr(user, "buyerprofile"):
+        return "buyer"
+    return "user"
 
 
-def _chart_series(price_rows):
-    per_crop = {}
-    for row in price_rows:
-        crop_name = row["crop"]
-        per_crop.setdefault(crop_name, []).append(row)
+def _listing_price_snapshot():
+    base_qs = Listing.objects.filter(active=True).select_related("crop", "market", "owner")
+    grouped = (
+        base_qs.values("crop_id", "crop__name")
+        .annotate(
+            lowest_price=Min("price"),
+            highest_price=Max("price"),
+            average_price=Avg("price"),
+            listing_count=Count("id"),
+            owner_count=Count("owner_id", distinct=True),
+        )
+        .order_by("crop__name")
+    )
 
-    series = []
-    for crop_name, rows in per_crop.items():
-        rows = sorted(rows, key=lambda r: r["date"])
-        series.append(
+    summaries = []
+    chart_datasets = []
+
+    for item in grouped:
+        crop_listings = list(base_qs.filter(crop_id=item["crop_id"]).order_by("price", "created_at", "id"))
+        if not crop_listings:
+            continue
+
+        lowest_listing = crop_listings[0]
+        highest_listing = crop_listings[-1]
+        farmer_listings = sum(1 for listing in crop_listings if _owner_role(listing.owner) == "farmer")
+        buyer_listings = sum(1 for listing in crop_listings if _owner_role(listing.owner) == "buyer")
+
+        summaries.append(
             {
-                "crop": crop_name,
-                "points": [{"date": r["date"], "value": r["predicted_price"], "confidence": r.get("confidence", 0)} for r in rows[:12]],
+                "crop": item["crop__name"],
+                "highest_price": round(float(item["highest_price"]), 2),
+                "lowest_price": round(float(item["lowest_price"]), 2),
+                "average_price": round(float(item["average_price"]), 2) if item["average_price"] is not None else None,
+                "listing_count": item["listing_count"],
+                "owner_count": item["owner_count"],
+                "farmer_listing_count": farmer_listings,
+                "buyer_listing_count": buyer_listings,
+                "highest_listing": {
+                    "owner": highest_listing.owner.username,
+                    "role": _owner_role(highest_listing.owner),
+                    "market": highest_listing.market.name if highest_listing.market else None,
+                    "price": round(float(highest_listing.price), 2),
+                    "quantity": round(float(highest_listing.quantity), 2),
+                    "unit": highest_listing.unit,
+                },
+                "lowest_listing": {
+                    "owner": lowest_listing.owner.username,
+                    "role": _owner_role(lowest_listing.owner),
+                    "market": lowest_listing.market.name if lowest_listing.market else None,
+                    "price": round(float(lowest_listing.price), 2),
+                    "quantity": round(float(lowest_listing.quantity), 2),
+                    "unit": lowest_listing.unit,
+                },
+                "source": "platform-listings",
             }
         )
-    return series
+        chart_datasets.append(
+            {
+                "label": item["crop__name"],
+                "values": [
+                    round(float(item["lowest_price"]), 2),
+                    round(float(item["highest_price"]), 2),
+                ],
+            }
+        )
+
+    return (
+        summaries,
+        {
+            "labels": ["Lowest Price", "Highest Price"],
+            "datasets": chart_datasets,
+            "source": "platform-listings",
+        },
+    )
 
 
 class PlatformOverviewView(APIView):
@@ -271,25 +307,7 @@ class PlatformAnalyticsView(APIView):
 
     def get(self, request):
         weather_payload = _weather_payload(city=request.query_params.get("city", "Makueni"))
-
-        stored = list(
-            PriceForecast.objects.select_related("crop", "market")
-            .order_by("-date")[:32]
-            .values("date", "crop__name", "market__name", "predicted_price", "confidence")
-        )
-        forecasts = [
-            {
-                "date": str(item["date"]),
-                "crop": item["crop__name"],
-                "market": item["market__name"],
-                "predicted_price": float(item["predicted_price"]),
-                "confidence": float(item["confidence"]),
-                "source": "stored-model",
-            }
-            for item in stored
-        ]
-        if not forecasts:
-            forecasts = _generated_price_predictions()
+        price_summaries, price_series = _listing_price_snapshot()
 
         advisories = list(FarmerInsight.objects.order_by("-created_at")[:8].values("title", "content", "severity", "created_at", "source"))
         if not advisories:
@@ -310,7 +328,7 @@ class PlatformAnalyticsView(APIView):
                 },
             ]
 
-        avg_listing_price = Listing.objects.values("crop__name").annotate(avg_price=Avg("price")).order_by("crop__name")[:8]
+        avg_listing_price = Listing.objects.filter(active=True).values("crop__name").annotate(avg_price=Avg("price")).order_by("crop__name")[:8]
         history = [{"crop": item["crop__name"] or "Unknown", "avg_price": round(float(item["avg_price"]), 2)} for item in avg_listing_price if item["avg_price"] is not None]
         if not history:
             history = [
@@ -359,8 +377,10 @@ class PlatformAnalyticsView(APIView):
                 "module": "analytics",
                 "weather": weather_payload,
                 "climate_alerts": climate_alerts,
-                "price_predictions": forecasts,
-                "price_series": _chart_series(forecasts),
+                "price_range_summary": price_summaries,
+                "price_range_chart": price_series,
+                "price_predictions": price_summaries,
+                "price_series": price_series,
                 "history": history,
                 "advisories": advisories,
                 "recommendations": recommendations,
@@ -495,8 +515,12 @@ class TransportRequestsView(APIView):
         if (booking_quantity is None or str(booking_quantity).strip() == "") and listing:
             booking_quantity = listing.quantity
 
+        booking_owner = request.user
+        if request.user.is_staff and listing:
+            booking_owner = listing.owner
+
         booking = Booking.objects.create(
-            farmer=request.user,
+            farmer=booking_owner,
             provider=provider,
             service=service,
             listing=listing,

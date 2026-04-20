@@ -198,8 +198,53 @@ class Listing(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)
     market = models.ForeignKey(Market, on_delete=models.SET_NULL, null=True, blank=True)
     contact_phone = models.CharField(max_length=50, blank=True)
+    produce_image = models.ImageField(upload_to='listing_images/', blank=True, null=True)
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"Listing {self.id} {self.crop.name} by {self.owner.username} - {self.quantity}{self.unit} @ {self.price}"
+
+
+class MarketplaceOrder(models.Model):
+    STATUS = [
+        ('cart', 'In Cart'),
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    listing = models.ForeignKey(Listing, on_delete=models.CASCADE, related_name='orders')
+    buyer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='placed_orders')
+    seller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='received_orders')
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    unit = models.CharField(max_length=30, default='kg')
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=STATUS, default='cart')
+    complaint_subject = models.CharField(max_length=200, blank=True)
+    complaint_message = models.TextField(blank=True)
+    complaint_open = models.BooleanField(default=False)
+    complaint_filed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='filed_order_complaints',
+    )
+    complaint_resolution = models.TextField(blank=True)
+    complaint_resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='resolved_order_complaints',
+    )
+    complaint_resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"Order {self.id} for listing {self.listing_id} by {self.buyer.username} ({self.status})"

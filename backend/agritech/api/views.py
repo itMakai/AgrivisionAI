@@ -1,11 +1,12 @@
 # api/views.py
-from core.models import WeatherForecast, PriceForecast, ServiceProvider, Service, StandardPrice, Booking, FarmerInsight, Listing, Crop, Market
+from core.models import WeatherForecast, PriceForecast, ServiceProvider, Service, StandardPrice, Booking, FarmerInsight, Listing, Crop, Market, MarketplaceOrder, Conversation, Message
 from rest_framework import viewsets, generics, permissions
 from .serializers import CropSerializer, MarketSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.shortcuts import get_object_or_404
 import requests
 import os
 import logging
@@ -18,10 +19,12 @@ from .serializers import (
     BookingSerializer, FarmerInsightSerializer
 )
 
-from .serializers import ListingSerializer
+from .serializers import ListingSerializer, MarketplaceOrderSerializer
 from .serializers import RatingSerializer
 from core.models import Rating
 from core.models import FarmerProfile, BuyerProfile
+
+User = get_user_model()
 
 
 def resolve_user_role(user):
@@ -146,6 +149,53 @@ class IsOwnerOrAdmin(BasePermission):
         return obj.owner_id == request.user.id
 
 
+def _get_internal_conversation(user_a, user_b):
+    users = sorted([str(user_a.id), str(user_b.id)])
+    key_phone = f"internal:{users[0]}:{users[1]}"
+    conv, _ = Conversation.objects.get_or_create(phone=key_phone, channel='internal')
+    try:
+        conv.participants.add(user_a, user_b)
+    except Exception:
+        logger.exception('Failed to add participants to internal conversation')
+    return conv
+
+
+def _notify_order_event(sender, recipient, body):
+    if not sender or not recipient or sender.id == recipient.id:
+        return
+    conv = _get_internal_conversation(sender, recipient)
+    msg = Message.objects.create(
+        conversation=conv,
+        sender=sender,
+        inbound=False,
+        body=body,
+        response='',
+    )
+    message_data = {
+        'id': msg.id,
+        'body': msg.body,
+        'sender': {'id': sender.id, 'username': sender.username},
+        'inbound': False,
+        'created_at': msg.created_at.isoformat(),
+        'conversation': conv.id,
+    }
+    try:
+        from messaging.tasks import broadcast_chat_message, notify_user
+        broadcast_chat_message.delay(conv.id, message_data)
+        notify_user.delay(recipient.id, {
+            'conversation_id': conv.id,
+            'sender': sender.username,
+            'preview': msg.body[:80],
+        })
+    except Exception:
+        try:
+            from messaging.utils import broadcast_to_conversation, notify_participants
+            broadcast_to_conversation(conv.id, message_data)
+            notify_participants(conv.id, sender, msg.body)
+        except Exception:
+            logger.exception('Failed to broadcast order notification')
+
+
 class PriceForecastViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = PriceForecast.objects.all().order_by('-date')
     serializer_class = PriceForecastSerializer
@@ -210,7 +260,7 @@ class ListingViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         # Accept crop by id (crop_id) or name (crop). Same for market.
-        data = self.request.data.copy()
+        data = self.request.data
         # resolve crop
         crop_obj = None
         if data.get('crop_id'):
@@ -238,7 +288,20 @@ class ListingViewSet(viewsets.ModelViewSet):
                 market_obj = Market.objects.filter(name__iexact=data.get('market')).first()
 
         # prepare kwargs for serializer
-        save_kwargs = {'owner': self.request.user}
+        owner = self.request.user
+        if self.request.user.is_staff:
+            owner_val = data.get('owner_id') or data.get('owner')
+            if owner_val:
+                try:
+                    owner = User.objects.get(id=int(owner_val))
+                except Exception:
+                    owner = User.objects.filter(username__iexact=str(owner_val).strip()).first() or self.request.user
+
+        save_kwargs = {
+            'owner': owner,
+            # User-created marketplace listings should be visible immediately.
+            'active': True,
+        }
         if crop_obj:
             save_kwargs['crop'] = crop_obj
         if market_obj is not None:
@@ -295,6 +358,207 @@ class ListingViewSet(viewsets.ModelViewSet):
                 | Q(owner__username__icontains=q)
             )
         return qs
+
+
+class MarketplaceOrdersView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsFarmerBuyerOrAdmin]
+
+    def get(self, request):
+        qs = MarketplaceOrder.objects.select_related('listing', 'listing__crop', 'listing__market', 'buyer', 'seller')
+        scope = request.query_params.get('scope')
+
+        if request.user.is_staff:
+            pass
+        elif scope == 'selling':
+            qs = qs.filter(seller=request.user)
+        elif scope == 'buying':
+            qs = qs.filter(buyer=request.user)
+        else:
+            from django.db.models import Q
+            qs = qs.filter(Q(buyer=request.user) | Q(seller=request.user))
+
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
+        serializer = MarketplaceOrderSerializer(qs.order_by('-updated_at'), many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def post(self, request):
+        listing_id = request.data.get('listing_id')
+        quantity = request.data.get('quantity') or 1
+        action = (request.data.get('action') or 'cart').strip().lower()
+        buyer_id = request.data.get('buyer_id')
+
+        if action not in ['cart', 'order']:
+            return Response({'detail': 'action must be cart or order'}, status=400)
+        if not listing_id:
+            return Response({'detail': 'listing_id is required'}, status=400)
+
+        listing = get_object_or_404(Listing, id=listing_id)
+        buyer_user = request.user
+        if request.user.is_staff and buyer_id:
+            buyer_user = get_object_or_404(User, id=buyer_id)
+
+        if listing.owner_id == buyer_user.id:
+            return Response({'detail': 'You cannot order your own product'}, status=400)
+        if not listing.active:
+            return Response({'detail': 'This listing is no longer active'}, status=400)
+
+        try:
+            quantity_val = float(quantity)
+        except Exception:
+            return Response({'detail': 'quantity must be a valid number'}, status=400)
+
+        if quantity_val <= 0:
+            return Response({'detail': 'quantity must be greater than zero'}, status=400)
+
+        if action == 'cart':
+            order, created = MarketplaceOrder.objects.get_or_create(
+                listing=listing,
+                buyer=buyer_user,
+                status='cart',
+                defaults={
+                    'seller': listing.owner,
+                    'quantity': quantity_val,
+                    'unit': listing.unit,
+                    'unit_price': listing.price,
+                },
+            )
+            if not created:
+                order.quantity = quantity_val
+                order.unit = listing.unit
+                order.unit_price = listing.price
+                order.seller = listing.owner
+                order.save(update_fields=['quantity', 'unit', 'unit_price', 'seller', 'updated_at'])
+            return Response(MarketplaceOrderSerializer(order, context={'request': request}).data, status=201 if created else 200)
+
+        order = MarketplaceOrder.objects.create(
+            listing=listing,
+            buyer=buyer_user,
+            seller=listing.owner,
+            quantity=quantity_val,
+            unit=listing.unit,
+            unit_price=listing.price,
+            status='pending',
+        )
+        _notify_order_event(
+            buyer_user,
+            listing.owner,
+            f"New order request: {buyer_user.username} requested {quantity_val} {listing.unit} of {listing.crop.name}.",
+        )
+        return Response(MarketplaceOrderSerializer(order, context={'request': request}).data, status=201)
+
+
+class MarketplaceOrderDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsFarmerBuyerOrAdmin]
+
+    def _get_order(self, request, order_id):
+        order = get_object_or_404(
+            MarketplaceOrder.objects.select_related('listing', 'listing__crop', 'buyer', 'seller'),
+            id=order_id,
+        )
+        if request.user.is_staff or order.buyer_id == request.user.id or order.seller_id == request.user.id:
+            return order
+        return None
+
+    def patch(self, request, order_id):
+        order = self._get_order(request, order_id)
+        if order is None:
+            return Response({'detail': 'Not allowed'}, status=403)
+
+        action = (request.data.get('action') or '').strip().lower()
+        quantity = request.data.get('quantity')
+        complaint_message = (request.data.get('complaint_message') or '').strip()
+
+        if quantity is not None and order.buyer_id == request.user.id and order.status == 'cart':
+            try:
+                quantity_val = float(quantity)
+            except Exception:
+                return Response({'detail': 'quantity must be a valid number'}, status=400)
+            if quantity_val <= 0:
+                return Response({'detail': 'quantity must be greater than zero'}, status=400)
+            order.quantity = quantity_val
+            order.save(update_fields=['quantity', 'updated_at'])
+            return Response(MarketplaceOrderSerializer(order, context={'request': request}).data)
+
+        if action == 'submit':
+            if order.buyer_id != request.user.id:
+                return Response({'detail': 'Only the buyer can submit this cart item'}, status=403)
+            if order.status != 'cart':
+                return Response({'detail': 'Only cart items can be submitted'}, status=400)
+            order.status = 'pending'
+            order.unit = order.listing.unit
+            order.unit_price = order.listing.price
+            order.save(update_fields=['status', 'unit', 'unit_price', 'updated_at'])
+            _notify_order_event(
+                request.user,
+                order.seller,
+                f"New order request: {request.user.username} submitted an order for {order.quantity} {order.unit} of {order.listing.crop.name}.",
+            )
+            return Response(MarketplaceOrderSerializer(order, context={'request': request}).data)
+
+        if action == 'approve':
+            if not (request.user.is_staff or order.seller_id == request.user.id):
+                return Response({'detail': 'Only the seller can approve this order'}, status=403)
+            if order.status != 'pending':
+                return Response({'detail': 'Only pending orders can be approved'}, status=400)
+            order.status = 'approved'
+            order.save(update_fields=['status', 'updated_at'])
+            _notify_order_event(
+                request.user,
+                order.buyer,
+                f"Order complete: {order.seller.username} approved your order for {order.listing.crop.name}.",
+            )
+            return Response(MarketplaceOrderSerializer(order, context={'request': request}).data)
+
+        if action == 'cancel':
+            if not (request.user.is_staff or order.buyer_id == request.user.id or order.seller_id == request.user.id):
+                return Response({'detail': 'Not allowed to cancel this order'}, status=403)
+            if order.status == 'cancelled':
+                return Response(MarketplaceOrderSerializer(order, context={'request': request}).data)
+            order.status = 'cancelled'
+            order.save(update_fields=['status', 'updated_at'])
+            if request.user.id == order.buyer_id:
+                _notify_order_event(
+                    request.user,
+                    order.seller,
+                    f"Order update: {request.user.username} cancelled the order for {order.listing.crop.name}.",
+                )
+            elif request.user.id == order.seller_id:
+                _notify_order_event(
+                    request.user,
+                    order.buyer,
+                    f"Order update: {request.user.username} cancelled the order for {order.listing.crop.name}.",
+                )
+            return Response(MarketplaceOrderSerializer(order, context={'request': request}).data)
+
+        if action == 'complain':
+            if request.user.id not in [order.buyer_id, order.seller_id] and not request.user.is_staff:
+                return Response({'detail': 'Only the buyer or seller can submit a complaint'}, status=403)
+            complaint_subject = (request.data.get('complaint_subject') or '').strip()
+            if not complaint_message:
+                return Response({'detail': 'complaint_message is required'}, status=400)
+            order.complaint_subject = complaint_subject
+            order.complaint_message = complaint_message
+            order.complaint_open = True
+            order.complaint_filed_by = request.user
+            order.complaint_resolution = ''
+            order.complaint_resolved_by = None
+            order.complaint_resolved_at = None
+            order.save(update_fields=[
+                'complaint_subject', 'complaint_message', 'complaint_open', 'complaint_filed_by',
+                'complaint_resolution', 'complaint_resolved_by', 'complaint_resolved_at', 'updated_at',
+            ])
+            other_party = order.seller if request.user.id == order.buyer_id else order.buyer
+            _notify_order_event(
+                request.user,
+                other_party,
+                f"Complaint filed for {order.listing.crop.name}: {complaint_subject or 'Order complaint'}",
+            )
+            return Response(MarketplaceOrderSerializer(order, context={'request': request}).data)
+
+        return Response({'detail': 'No valid update action provided'}, status=400)
 
 
 class CropViewSet(viewsets.ReadOnlyModelViewSet):

@@ -125,7 +125,40 @@ export async function fetchMarkets(params = {}) {
 
 export async function createListing(payload) {
   // payload: { crop, quantity, unit, price, market, contact_phone }
+  if (payload instanceof FormData) {
+    const res = await api.post('listings/', payload, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return res.data;
+  }
   const res = await api.post('listings/', payload);
+  return res.data;
+}
+
+export async function updateListing(id, payload) {
+  if (payload instanceof FormData) {
+    const res = await api.patch(`listings/${id}/`, payload, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return res.data;
+  }
+  const res = await api.patch(`listings/${id}/`, payload);
+  return res.data;
+}
+
+export async function deleteListing(id) {
+  const res = await api.delete(`listings/${id}/`);
+  return res.data;
+}
+
+export async function fetchOrders(params = {}) {
+  const res = await api.get('orders/', { params });
+  return res.data;
+}
+
+export async function createOrder(payload) {
+  const res = await api.post('orders/', payload);
+  return res.data;
+}
+
+export async function updateOrder(id, payload) {
+  const res = await api.patch(`orders/${id}/`, payload);
   return res.data;
 }
 
@@ -232,6 +265,11 @@ export async function deleteMessageById(messageId) {
 
 export async function deleteMessageAsAdmin(messageId) {
   const res = await api.delete(`admin/messages/${messageId}/`);
+  return res.data;
+}
+
+export async function resolveOrderComplaintAsAdmin(orderId, payload) {
+  const res = await api.patch(`admin/orders/${orderId}/complaint/`, payload);
   return res.data;
 }
 

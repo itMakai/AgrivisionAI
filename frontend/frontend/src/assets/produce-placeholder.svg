@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 220" role="img" aria-labelledby="title desc">
+  <title id="title">Produce placeholder</title>
+  <desc id="desc">Illustration used when a produce listing does not have an uploaded photo.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#eef9ef" />
+      <stop offset="100%" stop-color="#d7efd9" />
+    </linearGradient>
+    <linearGradient id="crate" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#bf7c3f" />
+      <stop offset="100%" stop-color="#8f5422" />
+    </linearGradient>
+  </defs>
+  <rect width="320" height="220" rx="24" fill="url(#bg)" />
+  <ellipse cx="160" cy="192" rx="112" ry="18" fill="#b5d5b8" />
+  <rect x="80" y="96" width="160" height="72" rx="14" fill="url(#crate)" />
+  <rect x="90" y="108" width="140" height="10" rx="5" fill="#d79a5a" opacity="0.85" />
+  <rect x="90" y="128" width="140" height="10" rx="5" fill="#d79a5a" opacity="0.85" />
+  <circle cx="116" cy="92" r="24" fill="#ff9f1c" />
+  <circle cx="154" cy="82" r="26" fill="#e63946" />
+  <circle cx="194" cy="92" r="24" fill="#f4d35e" />
+  <path d="M153 48c8 8 12 17 11 28-10-5-17-11-22-20 0-4 4-7 11-8z" fill="#2a9d4b" />
+  <path d="M115 60c6 5 9 11 9 18-7-3-12-7-16-13 0-3 2-5 7-5z" fill="#3aaf5a" />
+  <path d="M195 60c6 5 9 11 9 18-7-3-12-7-16-13 0-3 2-5 7-5z" fill="#3aaf5a" />
+</svg>

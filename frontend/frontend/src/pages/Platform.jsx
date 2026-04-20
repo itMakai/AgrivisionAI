@@ -16,7 +16,7 @@ const tabs = [
   { key: 'ai', label: 'Agro-Intelligence', icon: '🧠' },
 ];
 
-// --- Custom CSS for Dashboard Polish ---
+
 const dashboardStyles = `
   .hover-lift {
     transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
@@ -102,7 +102,7 @@ export default function AgriControlCenter() {
       { label: 'Registered Users', value: d1.users ?? 0, icon: '👥', bgColor: 'bg-primary-subtle', textColor: 'text-primary' },
       { label: 'Active Listings', value: d2.active_listings ?? 0, icon: '📦', bgColor: 'bg-success-subtle', textColor: 'text-success' },
       { label: 'Logistics Providers', value: d2.providers ?? 0, icon: '🚚', bgColor: 'bg-warning-subtle', textColor: 'text-warning' },
-      { label: 'AI Forecasts', value: (aiData?.price_predictions || []).length, icon: '📈', bgColor: 'bg-info-subtle', textColor: 'text-info' },
+      { label: 'Tracked Crops', value: (aiData?.price_predictions || []).length, icon: '📈', bgColor: 'bg-info-subtle', textColor: 'text-info' },
       { label: 'Agro-Advisories', value: (aiData?.advisories || []).length, icon: '💡', bgColor: 'bg-danger-subtle', textColor: 'text-danger' },
       { label: 'Profile Completion', value: `${d1.profile_completion_pct ?? 0}%`, icon: '⭐', bgColor: 'bg-secondary-subtle', textColor: 'text-secondary' },
     ];
@@ -342,7 +342,7 @@ function AiPanel({ data }) {
   const advisories = data?.advisories || [];
   const climateAlerts = data?.climate_alerts || [];
   const recommendations = data?.recommendations || [];
-  const priceSeries = data?.price_series || [];
+  const priceSeries = data?.price_series || { labels: [], datasets: [] };
 
   return (
     <div className="row g-4">
@@ -398,10 +398,10 @@ function AiPanel({ data }) {
         {/* Forecast Chart */}
         <div className="card border-0 shadow-sm rounded-4 flex-grow-1">
           <div className="card-header bg-white border-0 pt-4 px-4 pb-0">
-            <h5 className="fw-bold text-dark"><span className="fs-5 me-2">📈</span>Commodity Price Forecast Engine</h5>
+            <h5 className="fw-bold text-dark"><span className="fs-5 me-2">📈</span>Commodity Price Range Lines</h5>
           </div>
           <div className="card-body p-4">
-            <PriceTrendChart predictions={priceSeries} />
+            <PriceTrendChart predictions={priceSeries} title="All Crops on One Price Range Chart" />
           </div>
         </div>
 

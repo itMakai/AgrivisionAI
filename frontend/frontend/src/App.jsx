@@ -10,6 +10,8 @@ import ServiceDetail from './pages/ServiceDetail';
 import PlatformPage from './pages/Platform';
 import TransportPage from './pages/Transport';
 import MarketplacePage from './pages/Marketplace';
+import MyListingsPage from './pages/MyListings';
+import OrdersPage from './pages/Orders';
 import { loadAuthToken } from './lib/api';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -47,6 +49,8 @@ function App() {
     };
 
     const canUseMarketplace = hasRole(user, ['farmer', 'buyer']);
+    const canManageListings = hasRole(user, ['farmer', 'buyer']);
+    const canUseOrders = hasRole(user, ['farmer', 'buyer']);
     const canUseProviders = hasRole(user, ['farmer', 'buyer']);
     const canUseTransport = hasRole(user, ['farmer', 'buyer', 'provider']);
 
@@ -74,6 +78,8 @@ function App() {
               <>
                 <NavLink to="/platform" className="btn btn-sm btn-success">Platform</NavLink>
                 {canUseMarketplace ? <NavLink to="/marketplace" className="btn btn-sm btn-outline-light">Marketplace</NavLink> : null}
+                {canManageListings ? <NavLink to="/my-listings" className="btn btn-sm btn-outline-light">My Listings</NavLink> : null}
+                {canUseOrders ? <NavLink to="/orders" className="btn btn-sm btn-outline-light">Orders</NavLink> : null}
                 {canUseProviders ? <NavLink to="/providers" className="btn btn-sm btn-outline-light">Providers</NavLink> : null}
                 {canUseTransport ? <NavLink to="/transport" className="btn btn-sm btn-outline-light">Transport</NavLink> : null}
                 <NavLink to="/messages" className="btn btn-sm btn-outline-light">Messaging</NavLink>
@@ -97,6 +103,8 @@ function App() {
                 <>
                   <NavLink to="/platform" className="btn btn-sm btn-success" onClick={closeMobileMenu}>Platform</NavLink>
                   {canUseMarketplace ? <NavLink to="/marketplace" className="btn btn-sm btn-outline-light" onClick={closeMobileMenu}>Marketplace</NavLink> : null}
+                  {canManageListings ? <NavLink to="/my-listings" className="btn btn-sm btn-outline-light" onClick={closeMobileMenu}>My Listings</NavLink> : null}
+                  {canUseOrders ? <NavLink to="/orders" className="btn btn-sm btn-outline-light" onClick={closeMobileMenu}>Orders</NavLink> : null}
                   {canUseProviders ? <NavLink to="/providers" className="btn btn-sm btn-outline-light" onClick={closeMobileMenu}>Providers</NavLink> : null}
                   {canUseTransport ? <NavLink to="/transport" className="btn btn-sm btn-outline-light" onClick={closeMobileMenu}>Transport</NavLink> : null}
                   <NavLink to="/messages" className="btn btn-sm btn-outline-light" onClick={closeMobileMenu}>Messaging</NavLink>
@@ -164,6 +172,8 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/platform" element={<RequireAuth><PlatformPage /></RequireAuth>} />
             <Route path="/marketplace" element={<RequireRoles roles={['farmer', 'buyer']}><MarketplacePage /></RequireRoles>} />
+            <Route path="/my-listings" element={<RequireRoles roles={['farmer', 'buyer']}><MyListingsPage /></RequireRoles>} />
+            <Route path="/orders" element={<RequireRoles roles={['farmer', 'buyer']}><OrdersPage /></RequireRoles>} />
             <Route path="/messages" element={<RequireAuth><MessagesPage lang="en" /></RequireAuth>} />
             <Route path="/inbox" element={<RequireAuth><InboxPage /></RequireAuth>} />
             <Route path="/providers" element={<RequireRoles roles={['farmer', 'buyer']}><ProvidersPage /></RequireRoles>} />

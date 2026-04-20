@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from core.models import PriceForecast, WeatherForecast, ServiceProvider, Service, StandardPrice, Booking, FarmerInsight, Crop, Market, Rating
-from core.models import Listing
+from core.models import Listing, MarketplaceOrder
 from core.models import Crop as CropModel, Market as MarketModel
 
 
@@ -87,6 +87,7 @@ class ListingSerializer(serializers.ModelSerializer):
     market = serializers.CharField(source='market.name', allow_null=True, read_only=True)
     owner = serializers.CharField(source='owner.username', read_only=True)
     owner_id = serializers.IntegerField(source='owner.id', read_only=True)
+    produce_image = serializers.ImageField(required=False, allow_null=True)
     # write fields
     crop_id = serializers.PrimaryKeyRelatedField(queryset=Crop.objects.all(), source='crop', write_only=True, required=False)
     market_id = serializers.PrimaryKeyRelatedField(queryset=Market.objects.all(), source='market', write_only=True, allow_null=True, required=False)
@@ -99,7 +100,7 @@ class ListingSerializer(serializers.ModelSerializer):
         model = Listing
         fields = [
             'id', 'owner', 'owner_id', 'owner_description', 'owner_has_transport', 'owner_transport_capacity', 'owner_transport_unit',
-            'crop', 'crop_id', 'quantity', 'unit', 'price', 'market', 'market_id', 'contact_phone', 'active', 'created_at'
+            'crop', 'crop_id', 'quantity', 'unit', 'price', 'market', 'market_id', 'contact_phone', 'produce_image', 'active', 'created_at'
         ]
         read_only_fields = ['owner', 'created_at']
 
@@ -117,30 +118,40 @@ class ListingSerializer(serializers.ModelSerializer):
         sent a `crop` name string instead of a `crop_id`.
         """
         data = self.initial_data or {}
+        is_partial_update = bool(self.instance)
 
         # Resolve crop: accept 'crop_id' (pk) or 'crop' (name or id)
         if 'crop' not in attrs:
             crop_val = data.get('crop') or data.get('crop_id')
             crop_obj = None
             if crop_val is not None:
+                crop_val = str(crop_val).strip()
                 try:
                     crop_obj = Crop.objects.get(id=int(crop_val))
                 except Exception:
                     crop_obj = Crop.objects.filter(name__iexact=str(crop_val)).first()
+                    if not crop_obj and crop_val:
+                        crop_obj = Crop.objects.create(
+                            name=crop_val,
+                            swahili_name=crop_val,
+                        )
 
-            if not crop_obj:
+            if crop_obj:
+                attrs['crop'] = crop_obj
+            elif not is_partial_update:
                 raise serializers.ValidationError({'crop': 'Crop not found. Create the crop first or provide a valid crop_id.'})
-
-            attrs['crop'] = crop_obj
 
         # Resolve market if provided by name/id
         if 'market' not in attrs and (data.get('market') or data.get('market_id')):
             market_val = data.get('market') or data.get('market_id')
             market_obj = None
+            market_val = str(market_val).strip()
             try:
                 market_obj = Market.objects.get(id=int(market_val))
             except Exception:
                 market_obj = Market.objects.filter(name__iexact=str(market_val)).first()
+                if not market_obj and market_val:
+                    market_obj = Market.objects.create(name=market_val)
             if market_obj:
                 attrs['market'] = market_obj
 
@@ -166,6 +177,68 @@ class ListingSerializer(serializers.ModelSerializer):
             return bp.transport_unit
         except Exception:
             return None
+
+
+class MarketplaceOrderSerializer(serializers.ModelSerializer):
+    listing_id = serializers.IntegerField(source='listing.id', read_only=True)
+    crop = serializers.CharField(source='listing.crop.name', read_only=True)
+    market = serializers.CharField(source='listing.market.name', read_only=True, allow_null=True)
+    produce_image = serializers.SerializerMethodField()
+    listing_owner = serializers.CharField(source='seller.username', read_only=True)
+    buyer_username = serializers.CharField(source='buyer.username', read_only=True)
+    listing_active = serializers.BooleanField(source='listing.active', read_only=True)
+    total_price = serializers.SerializerMethodField()
+    status_label = serializers.SerializerMethodField()
+    complaint_filed_by_username = serializers.CharField(source='complaint_filed_by.username', read_only=True, allow_null=True)
+    complaint_resolved_by_username = serializers.CharField(source='complaint_resolved_by.username', read_only=True, allow_null=True)
+
+    class Meta:
+        model = MarketplaceOrder
+        fields = [
+            'id', 'listing_id', 'buyer', 'buyer_username', 'seller', 'listing_owner',
+            'crop', 'market', 'produce_image', 'quantity', 'unit', 'unit_price', 'total_price',
+            'status', 'status_label', 'complaint_subject', 'complaint_message', 'complaint_open',
+            'complaint_filed_by', 'complaint_filed_by_username',
+            'complaint_resolution', 'complaint_resolved_by', 'complaint_resolved_by_username', 'complaint_resolved_at',
+            'listing_active',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'buyer', 'buyer_username', 'seller', 'listing_owner', 'crop', 'market', 'produce_image',
+            'unit_price', 'unit', 'total_price', 'status_label', 'listing_active', 'created_at', 'updated_at',
+            'complaint_filed_by', 'complaint_filed_by_username',
+            'complaint_resolved_by', 'complaint_resolved_by_username', 'complaint_resolved_at',
+        ]
+
+    def get_total_price(self, obj):
+        try:
+            return round(float(obj.quantity) * float(obj.unit_price), 2)
+        except Exception:
+            return None
+
+    def get_produce_image(self, obj):
+        image = getattr(obj.listing, 'produce_image', None)
+        if not image:
+            return None
+        try:
+            url = image.url
+        except Exception:
+            return None
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(url)
+        return url
+
+    def get_status_label(self, obj):
+        if obj.status == 'cart':
+            return 'In cart'
+        if obj.status == 'pending':
+            return 'Pending order'
+        if obj.status == 'approved':
+            return 'Order complete'
+        if obj.status == 'cancelled':
+            return 'Cancelled'
+        return obj.status
 
 
 class CropSerializer(serializers.ModelSerializer):

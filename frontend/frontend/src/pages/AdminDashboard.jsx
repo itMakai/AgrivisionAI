@@ -7,6 +7,7 @@ import {
   fetchAdminMetrics,
   fetchAdminUsers,
   moderateTransportRequest,
+  resolveOrderComplaintAsAdmin,
   updateAdminManagedUser,
 } from '../lib/api';
 
@@ -18,6 +19,7 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState([]);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
+  const [resolvingComplaintId, setResolvingComplaintId] = useState(null);
   const [form, setForm] = useState({
     username: '',
     email: '',
@@ -65,6 +67,31 @@ export default function AdminDashboard() {
       }));
     } catch (err) {
       setError(err?.response?.data?.detail || 'Failed to delete request');
+    }
+  }
+
+  async function resolveComplaint(id) {
+    const resolution = window.prompt('Enter the admin decision / resolution for this complaint:');
+    if (!resolution) return;
+    setError('');
+    setResolvingComplaintId(id);
+    try {
+      await resolveOrderComplaintAsAdmin(id, { resolution });
+      setData((prev) => ({
+        ...prev,
+        totals: {
+          ...(prev?.totals || {}),
+          open_complaints: Math.max(0, Number(prev?.totals?.open_complaints || 0) - 1),
+        },
+        recent: {
+          ...(prev?.recent || {}),
+          complaints: (prev?.recent?.complaints || []).filter((c) => c.id !== id),
+        },
+      }));
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Failed to resolve complaint');
+    } finally {
+      setResolvingComplaintId(null);
     }
   }
 
@@ -191,6 +218,59 @@ export default function AdminDashboard() {
                               ) : null}
                               <button className="btn btn-sm btn-outline-danger" onClick={() => deleteTransportRequest(r.id)}>Delete</button>
                             </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="row g-3 mt-1">
+        <div className="col-12">
+          <div className="card app-card">
+            <div className="card-body">
+              <h6 className="mb-3">Open order complaints</h6>
+              {(recent.complaints || []).length === 0 ? (
+                <div className="text-muted small">No open complaints.</div>
+              ) : (
+                <div className="table-responsive">
+                  <table className="table table-sm mb-0">
+                    <thead>
+                      <tr>
+                        <th>Order</th>
+                        <th>Crop</th>
+                        <th>Filed by</th>
+                        <th>Buyer</th>
+                        <th>Seller</th>
+                        <th>Complaint</th>
+                        <th className="text-end">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recent.complaints.map((c) => (
+                        <tr key={c.id}>
+                          <td>#{c.id}</td>
+                          <td>{c.listing__crop__name}</td>
+                          <td>{c.complaint_filed_by__username || 'Unknown'}</td>
+                          <td>{c.buyer__username}</td>
+                          <td>{c.seller__username}</td>
+                          <td>
+                            <div className="fw-semibold small">{c.complaint_subject || 'Complaint'}</div>
+                            <div className="small text-muted">{c.complaint_message}</div>
+                          </td>
+                          <td className="text-end">
+                            <button
+                              className="btn btn-sm btn-outline-success"
+                              onClick={() => resolveComplaint(c.id)}
+                              disabled={resolvingComplaintId === c.id}
+                            >
+                              {resolvingComplaintId === c.id ? 'Resolving...' : 'Resolve'}
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -358,4 +438,3 @@ export default function AdminDashboard() {
     </div>
   );
 }
-

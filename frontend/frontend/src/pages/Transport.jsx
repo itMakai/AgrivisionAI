@@ -72,6 +72,7 @@ export default function TransportPage() {
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   const title = useMemo(() => {
     if (isProvider) return 'Assigned delivery requests';
@@ -81,13 +82,15 @@ export default function TransportPage() {
 
   async function loadAll() {
     setLoading(true);
+    setError('');
     try {
       const req = await fetchTransportRequests();
       setRequests(req || []);
 
       if (!isProvider) {
+        const listingParams = isAdmin ? { active: true } : { owner: 'me' };
         const [listingData, marketData] = await Promise.all([
-          fetchListings({ owner: 'me' }),
+          fetchListings(listingParams),
           fetchMarkets(),
         ]);
         setListings(listingData?.results || listingData || []);
@@ -96,6 +99,8 @@ export default function TransportPage() {
         setListings([]);
         setMarkets([]);
       }
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Failed to load logistics data');
     } finally {
       setLoading(false);
     }
@@ -118,7 +123,10 @@ export default function TransportPage() {
     setSelectedOption('');
     fetchTransportOptions({ listing_id: selectedListing })
       .then((rows) => setOptions(rows || []))
-      .catch(() => setOptions([]));
+      .catch((err) => {
+        setOptions([]);
+        setError(err?.response?.data?.detail || 'Failed to load transport providers');
+      });
   }, [selectedListing, isProvider, listings]);
 
   async function handleCreateRequest(e) {
@@ -126,6 +134,7 @@ export default function TransportPage() {
     if (!selectedOption) return;
 
     setSubmitting(true);
+    setError('');
     try {
       const option = options.find((row) => String(row.service_id) === String(selectedOption));
       await createTransportRequest({
@@ -144,19 +153,31 @@ export default function TransportPage() {
       setScheduledDate('');
 
       await loadAll();
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Could not create the transport request');
     } finally {
       setSubmitting(false);
     }
   }
 
   async function changeStatus(id, status) {
-    await updateTransportRequestStatus(id, status);
-    await loadAll();
+    setError('');
+    try {
+      await updateTransportRequestStatus(id, status);
+      await loadAll();
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Could not update the transport request');
+    }
   }
 
   async function deleteRequest(id) {
-    await deleteTransportRequestAsAdmin(id);
-    await loadAll();
+    setError('');
+    try {
+      await deleteTransportRequestAsAdmin(id);
+      await loadAll();
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Could not delete the transport request');
+    }
   }
 
   if (loading) {
@@ -178,10 +199,14 @@ export default function TransportPage() {
           <div className="opacity-75">
             {isProvider
               ? 'Review, accept and complete assigned delivery requests.'
-              : 'Request transport after agreeing on a deal in chat. Track delivery status here.'}
+              : isAdmin
+                ? 'Request transport for any farmer listing on the platform and supervise delivery progress.'
+                : 'Request transport after agreeing on a deal in chat. Track delivery status here.'}
           </div>
         </div>
       </div>
+
+      {error ? <div className="alert alert-danger">{error}</div> : null}
 
       <div className="row g-4">
         {!isProvider ? (
@@ -189,17 +214,19 @@ export default function TransportPage() {
             <div className="card border-0 shadow-sm rounded-4 flex-grow-1 hover-lift">
               <div className="card-header bg-white border-bottom-0 pt-4 px-4 pb-3">
                 <h5 className="fw-bold text-dark mb-0">Request transport</h5>
-                <small className="text-muted">Create a delivery request for one of your listings.</small>
+                <small className="text-muted">{isAdmin ? 'Create a delivery request for any farmer or buyer listing on the platform.' : 'Create a delivery request for one of your listings.'}</small>
               </div>
               <div className="card-body p-4 d-flex flex-column">
                 <form onSubmit={handleCreateRequest} className="d-flex flex-column h-100">
                   <div className="mb-3">
-                    <label className="form-label fw-semibold text-muted small">Your listing</label>
+                    <label className="form-label fw-semibold text-muted small">{isAdmin ? 'Platform listing' : 'Your listing'}</label>
                     <select className="form-select form-select-custom" value={selectedListing} onChange={(e) => setSelectedListing(e.target.value)} required>
                       <option value="">-- Select listing --</option>
                       {listings.map((l) => (
                         <option key={l.id} value={l.id}>
-                          {l.crop} - {l.quantity} {l.unit}
+                          {isAdmin
+                            ? `${l.owner} - ${l.crop} - ${l.quantity} ${l.unit}`
+                            : `${l.crop} - ${l.quantity} ${l.unit}`}
                         </option>
                       ))}
                     </select>

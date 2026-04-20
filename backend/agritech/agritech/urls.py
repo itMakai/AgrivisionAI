@@ -25,6 +25,7 @@ urlpatterns = [
     path('api/admin/users/', admin_views.AdminUserManagementView.as_view()),
     path('api/admin/users/<int:user_id>/', admin_views.AdminUserManagementView.as_view()),
     path('api/admin/transport-requests/<int:booking_id>/', admin_views.AdminTransportRequestModerationView.as_view()),
+    path('api/admin/orders/<int:order_id>/complaint/', admin_views.AdminOrderComplaintModerationView.as_view()),
     path('api/admin/messages/<int:message_id>/', admin_views.AdminMessageModerationView.as_view()),
     path('api/platform/overview/', platform_views.PlatformOverviewView.as_view()),
     path('api/platform/auth/', platform_views.PlatformAuthView.as_view()),
@@ -42,6 +43,8 @@ urlpatterns = [
     path('api/auth/', include('api.auth_urls')),
     path('api/bookings/', views.BookingCreateAPIView.as_view()),
     path('api/insights/', views.FarmerInsightsListView.as_view()),
+    path('api/orders/', views.MarketplaceOrdersView.as_view()),
+    path('api/orders/<int:order_id>/', views.MarketplaceOrderDetailView.as_view()),
     # catch-all router (registers prices, weather, providers, services, etc.)
     path('api/', include(router.urls)),
 ]
